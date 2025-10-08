@@ -1,0 +1,48 @@
+version: '3.8'
+
+services:
+  # PostgreSQL
+  postgres:
+    image: postgres:15-alpine
+    container_name: ailead_postgres
+    environment:
+      POSTGRES_DB: ailead
+      POSTGRES_USER: ailead
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-ailead_password}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/migrations:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ailead"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ailead-network
+
+  # Redis
+  redis:
+    image: redis:7-alpine
+    container_name: ailead_redis
+    command: redis-server --save 60 1 --loglevel warning
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ailead-network
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  ailead-network:
+    driver: bridge
