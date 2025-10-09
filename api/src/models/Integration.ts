@@ -7,8 +7,8 @@ interface IntegrationAttributes {
     account_id: number;
     amocrm_account_id: number;
     base_url: string;
-    domain?: string;  // ← сделали optional
-    client_id?: string;  // ← сделали optional
+    domain?: string;
+    client_id?: string;
     access_token: string;
     refresh_token: string;
     token_expiry: number;
@@ -23,20 +23,20 @@ interface IntegrationCreationAttributes
 
 export class Integration extends Model<IntegrationAttributes, IntegrationCreationAttributes>
     implements IntegrationAttributes {
-    public id!: number;
-    public account_id!: number;
-    public amocrm_account_id!: number;
-    public base_url!: string;
-    public domain?: string;  // ← изменили
-    public client_id?: string;  // ← изменили
-    public access_token!: string;
-    public refresh_token!: string;
-    public token_expiry!: number;
-    public status!: 'active' | 'expired' | 'revoked';
-    public last_sync_at!: Date | null;
+    declare id: number;
+    declare account_id: number;
+    declare amocrm_account_id: number;
+    declare base_url: string;
+    declare domain?: string;
+    declare client_id?: string;
+    declare access_token: string;
+    declare refresh_token: string;
+    declare token_expiry: number;
+    declare status: 'active' | 'expired' | 'revoked';
+    declare last_sync_at: Date | null;
 
-    public readonly created_at!: Date;
-    public readonly updated_at!: Date;
+    declare readonly created_at: Date;
+    declare readonly updated_at: Date;
 }
 
 Integration.init(
@@ -64,12 +64,12 @@ Integration.init(
         },
         domain: {
             type: DataTypes.STRING(255),
-            allowNull: true,  // ← ВАЖНО: true вместо false
+            allowNull: true,
             defaultValue: null
         },
         client_id: {
             type: DataTypes.STRING(255),
-            allowNull: true,  // ← ВАЖНО: true вместо false
+            allowNull: true,
             defaultValue: null
         },
         access_token: {

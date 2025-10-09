@@ -14,6 +14,7 @@ import scenariosRouter from './routes/scenarios.routes.js';
 import analyticsRouter from './routes/analytics.routes.js';
 import integrationsRouter from './routes/integrations.routes.js';
 import webhookRouter from './routes/webhook.routes.js';
+import iframeRouter from './routes/iframe.routes.js';
 
 const app = express();
 const httpServer = createServer(app);
@@ -28,16 +29,51 @@ const io = new Server(httpServer, {
 
 // Middleware
 app.use(helmet({
-  contentSecurityPolicy: false // Отключаем для iframe
+  contentSecurityPolicy: false,  // ← Должно быть false
+  frameguard: false  // ← ДОБАВЬТЕ эту строку
 }));
-
+// ✅ ИСПРАВЛЕННЫЙ CORS
 app.use(cors({
-  origin: [
-    process.env.VITE_API_URL || 'http://localhost:3000',
-    'https://*.amocrm.ru',
-    'https://*.amocrm.com'
-  ],
-  credentials: true
+  origin: function(origin, callback) {
+    // Логируем все запросы для отладки
+    logger.info('CORS check', { origin });
+
+    // Разрешённые origins
+    const allowedOrigins = [
+      process.env.VITE_API_URL || 'http://localhost:3000',
+      'http://localhost:4000',
+      'https://voiceleadai.ru',
+      /^https:\/\/.*\.amocrm\.ru$/,   // ← Регулярное выражение для *.amocrm.ru
+      /^https:\/\/.*\.amocrm\.com$/   // ← Регулярное выражение для *.amocrm.com
+    ];
+
+    // Если origin не указан (например, Postman, curl) - разрешаем
+    if (!origin) {
+      callback(null, true);
+      return;
+    }
+
+    // Проверяем, разрешён ли origin
+    const isAllowed = allowedOrigins.some(allowed => {
+      if (typeof allowed === 'string') {
+        return allowed === origin;
+      } else if (allowed instanceof RegExp) {
+        return allowed.test(origin);
+      }
+      return false;
+    });
+
+    if (isAllowed) {
+      logger.info('CORS allowed', { origin });
+      callback(null, true);
+    } else {
+      logger.warn('CORS blocked', { origin });
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
 app.use(express.json({ limit: '10mb' }));
@@ -47,7 +83,8 @@ app.use(express.urlencoded({ extended: true }));
 app.use((req, res, next) => {
   logger.info(`${req.method} ${req.path}`, {
     ip: req.ip,
-    userAgent: req.get('user-agent')
+    userAgent: req.get('user-agent'),
+    origin: req.get('origin')
   });
   next();
 });
@@ -64,6 +101,7 @@ app.use('/api/scenarios', scenariosRouter);
 app.use('/api/analytics', analyticsRouter);
 app.use('/api/integrations', integrationsRouter);
 app.use('/api/webhook', webhookRouter);
+app.use('/iframe', iframeRouter);  // ← ДОБАВЬТЕ (без /api!)
 
 // WebSocket setup
 setupWebSocket(io);
