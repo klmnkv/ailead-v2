@@ -1,122 +1,110 @@
-import { Model, DataTypes } from 'sequelize';
+// api/src/models/Integration.ts
+import { DataTypes, Model, Optional } from 'sequelize';
 import { sequelize } from '../config/database.js';
-import CryptoJS from 'crypto-js';
 
-const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || 'default_key_change_in_production_32c';
-
-/**
- * Шифрует токен
- */
-function encryptToken(token: string): string {
-  return CryptoJS.AES.encrypt(token, ENCRYPTION_KEY).toString();
+interface IntegrationAttributes {
+    id: number;
+    account_id: number;
+    amocrm_account_id: number;
+    base_url: string;
+    domain?: string;  // ← сделали optional
+    client_id?: string;  // ← сделали optional
+    access_token: string;
+    refresh_token: string;
+    token_expiry: number;
+    status: 'active' | 'expired' | 'revoked';
+    last_sync_at: Date | null;
+    created_at: Date;
+    updated_at: Date;
 }
 
-/**
- * Расшифровывает токен
- */
-function decryptToken(encrypted: string): string {
-  try {
-    const bytes = CryptoJS.AES.decrypt(encrypted, ENCRYPTION_KEY);
-    return bytes.toString(CryptoJS.enc.Utf8);
-  } catch (error) {
-    console.error('Token decryption failed:', error);
-    return '';
-  }
-}
+interface IntegrationCreationAttributes
+    extends Optional<IntegrationAttributes, 'id' | 'domain' | 'client_id' | 'last_sync_at' | 'created_at' | 'updated_at'> {}
 
-export class Integration extends Model {
-  public id!: number;
-  public account_id!: number;
-  public amocrm_account_id!: number;
-  public base_url!: string;
-  public access_token!: string;
-  public refresh_token!: string;
-  public token_expiry!: number;
-  public status!: string;
-  public last_sync_at?: Date;
-  public readonly created_at!: Date;
-  public readonly updated_at!: Date;
+export class Integration extends Model<IntegrationAttributes, IntegrationCreationAttributes>
+    implements IntegrationAttributes {
+    public id!: number;
+    public account_id!: number;
+    public amocrm_account_id!: number;
+    public base_url!: string;
+    public domain?: string;  // ← изменили
+    public client_id?: string;  // ← изменили
+    public access_token!: string;
+    public refresh_token!: string;
+    public token_expiry!: number;
+    public status!: 'active' | 'expired' | 'revoked';
+    public last_sync_at!: Date | null;
+
+    public readonly created_at!: Date;
+    public readonly updated_at!: Date;
 }
 
 Integration.init(
-  {
-    id: {
-      type: DataTypes.INTEGER,
-      autoIncrement: true,
-      primaryKey: true
+    {
+        id: {
+            type: DataTypes.INTEGER,
+            autoIncrement: true,
+            primaryKey: true
+        },
+        account_id: {
+            type: DataTypes.INTEGER,
+            allowNull: false,
+            references: {
+                model: 'accounts',
+                key: 'id'
+            }
+        },
+        amocrm_account_id: {
+            type: DataTypes.INTEGER,
+            allowNull: false
+        },
+        base_url: {
+            type: DataTypes.STRING(255),
+            allowNull: false
+        },
+        domain: {
+            type: DataTypes.STRING(255),
+            allowNull: true,  // ← ВАЖНО: true вместо false
+            defaultValue: null
+        },
+        client_id: {
+            type: DataTypes.STRING(255),
+            allowNull: true,  // ← ВАЖНО: true вместо false
+            defaultValue: null
+        },
+        access_token: {
+            type: DataTypes.TEXT,
+            allowNull: false
+        },
+        refresh_token: {
+            type: DataTypes.TEXT,
+            allowNull: false
+        },
+        token_expiry: {
+            type: DataTypes.INTEGER,
+            allowNull: false
+        },
+        status: {
+            type: DataTypes.STRING(50),
+            defaultValue: 'active'
+        },
+        last_sync_at: {
+            type: DataTypes.DATE,
+            allowNull: true
+        },
+        created_at: {
+            type: DataTypes.DATE,
+            defaultValue: DataTypes.NOW
+        },
+        updated_at: {
+            type: DataTypes.DATE,
+            defaultValue: DataTypes.NOW
+        }
     },
-    account_id: {
-      type: DataTypes.INTEGER,
-      allowNull: false,
-      references: {
-        model: 'accounts',
-        key: 'id'
-      },
-      onDelete: 'CASCADE'
-    },
-    amocrm_account_id: {
-      type: DataTypes.INTEGER,
-      allowNull: false
-    },
-    base_url: {
-      type: DataTypes.STRING(255),
-      allowNull: false,
-      validate: {
-        isUrl: true
-      }
-    },
-    access_token: {
-      type: DataTypes.TEXT,
-      allowNull: false,
-      get() {
-        const encrypted = this.getDataValue('access_token');
-        return encrypted ? decryptToken(encrypted) : '';
-      },
-      set(value: string) {
-        this.setDataValue('access_token', encryptToken(value));
-      }
-    },
-    refresh_token: {
-      type: DataTypes.TEXT,
-      allowNull: false,
-      get() {
-        const encrypted = this.getDataValue('refresh_token');
-        return encrypted ? decryptToken(encrypted) : '';
-      },
-      set(value: string) {
-        this.setDataValue('refresh_token', encryptToken(value));
-      }
-    },
-    token_expiry: {
-      type: DataTypes.INTEGER,
-      allowNull: false,
-      comment: 'Unix timestamp of token expiry'
-    },
-    status: {
-      type: DataTypes.STRING(50),
-      defaultValue: 'active',
-      validate: {
-        isIn: [['active', 'inactive', 'expired', 'error']]
-      }
-    },
-    last_sync_at: {
-      type: DataTypes.DATE,
-      allowNull: true
+    {
+        sequelize,
+        tableName: 'integrations',
+        timestamps: true,
+        underscored: true
     }
-  },
-  {
-    sequelize,
-    tableName: 'integrations',
-    underscored: true,
-    timestamps: true,
-    indexes: [
-      {
-        unique: true,
-        fields: ['account_id', 'amocrm_account_id']
-      },
-      {
-        fields: ['status']
-      }
-    ]
-  }
 );

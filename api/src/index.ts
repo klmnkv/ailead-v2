@@ -1,9 +1,18 @@
 import 'dotenv/config';
+// ОБЯЗАТЕЛЬНО В САМОМ НАЧАЛЕ!
+import dotenv from 'dotenv';
+dotenv.config();
+
+// Отладка - временно добавьте
+console.log('🔍 Environment variables check:');
+console.log('  AMOCRM_CLIENT_ID:', process.env.AMOCRM_CLIENT_ID || '❌ NOT SET');
+console.log('  AMOCRM_CLIENT_SECRET:', process.env.AMOCRM_CLIENT_SECRET ? '✅ SET (hidden)' : '❌ NOT SET');
+console.log('  API_DOMAIN:', process.env.API_DOMAIN || '❌ NOT SET');
+console.log('  DATABASE_URL:', process.env.DATABASE_URL?.split('@')[1] || '❌ NOT SET');
 import { httpServer } from './app.js';
 import { sequelize } from './config/database.js';
 import { connectRedis } from './config/redis.js';
 import { logger } from './utils/logger.js';
-import { Account, Integration, Message } from './models/index.js';
 
 const PORT = process.env.PORT || 4000;
 

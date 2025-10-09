@@ -13,6 +13,7 @@ import queueRouter from './routes/queue.routes.js';
 import scenariosRouter from './routes/scenarios.routes.js';
 import analyticsRouter from './routes/analytics.routes.js';
 import integrationsRouter from './routes/integrations.routes.js';
+import webhookRouter from './routes/webhook.routes.js';
 
 const app = express();
 const httpServer = createServer(app);
@@ -26,11 +27,19 @@ const io = new Server(httpServer, {
 });
 
 // Middleware
-app.use(helmet());
+app.use(helmet({
+  contentSecurityPolicy: false // Отключаем для iframe
+}));
+
 app.use(cors({
-  origin: process.env.VITE_API_URL || 'http://localhost:3000',
+  origin: [
+    process.env.VITE_API_URL || 'http://localhost:3000',
+    'https://*.amocrm.ru',
+    'https://*.amocrm.com'
+  ],
   credentials: true
 }));
+
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
@@ -54,6 +63,7 @@ app.use('/api/queue', queueRouter);
 app.use('/api/scenarios', scenariosRouter);
 app.use('/api/analytics', analyticsRouter);
 app.use('/api/integrations', integrationsRouter);
+app.use('/api/webhook', webhookRouter);
 
 // WebSocket setup
 setupWebSocket(io);
