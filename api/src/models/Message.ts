@@ -2,20 +2,20 @@ import { Model, DataTypes } from 'sequelize';
 import { sequelize } from '../config/database.js';
 
 export class Message extends Model {
-  declare id: number;
-  declare account_id: number;
-  declare integration_id: number;
-  declare lead_id: number;
-  declare message_text: string;
-  declare message_type: string;
-  declare direction: string;
-  declare status: string;
-  declare processing_time: number | null;
-  declare error_message: string | null;
-  declare screenshot_url: string | null;
-  declare job_id: string | null;
-  declare created_at: Date;
-  declare sent_at: Date | null;
+  public id!: number;
+  public account_id!: number;
+  public integration_id?: number;
+  public lead_id!: number;
+  public message_text!: string;
+  public message_type!: string;
+  public direction!: string;
+  public status!: string;
+  public processing_time?: number;
+  public error_message?: string;
+  public screenshot_url?: string;
+  public job_id?: string;
+  public readonly created_at!: Date;
+  public sent_at?: Date;
 }
 
 Message.init(
@@ -27,11 +27,19 @@ Message.init(
     },
     account_id: {
       type: DataTypes.INTEGER,
-      allowNull: true
+      allowNull: false,
+      references: {
+        model: 'accounts',
+        key: 'id'
+      }
     },
     integration_id: {
       type: DataTypes.INTEGER,
-      allowNull: true
+      allowNull: true,
+      references: {
+        model: 'integrations',
+        key: 'id'
+      }
     },
     lead_id: {
       type: DataTypes.INTEGER,
@@ -43,19 +51,29 @@ Message.init(
     },
     message_type: {
       type: DataTypes.STRING(50),
-      defaultValue: 'chat'
+      defaultValue: 'chat',
+      validate: {
+        isIn: [['chat', 'note', 'task', 'email']]
+      }
     },
     direction: {
       type: DataTypes.STRING(20),
-      defaultValue: 'outgoing'
+      defaultValue: 'outgoing',
+      validate: {
+        isIn: [['incoming', 'outgoing']]
+      }
     },
     status: {
       type: DataTypes.STRING(50),
-      defaultValue: 'pending'
+      defaultValue: 'pending',
+      validate: {
+        isIn: [['pending', 'queued', 'processing', 'sent', 'failed']]
+      }
     },
     processing_time: {
       type: DataTypes.INTEGER,
-      allowNull: true
+      allowNull: true,
+      comment: 'Processing time in milliseconds'
     },
     error_message: {
       type: DataTypes.TEXT,
@@ -69,10 +87,6 @@ Message.init(
       type: DataTypes.STRING(255),
       allowNull: true
     },
-    created_at: {
-      type: DataTypes.DATE,
-      defaultValue: DataTypes.NOW
-    },
     sent_at: {
       type: DataTypes.DATE,
       allowNull: true
@@ -82,6 +96,21 @@ Message.init(
     sequelize,
     tableName: 'messages',
     underscored: true,
-    timestamps: false
+    timestamps: true,
+    updatedAt: false, // Только created_at, без updated_at
+    indexes: [
+      {
+        fields: ['account_id', 'lead_id']
+      },
+      {
+        fields: ['status']
+      },
+      {
+        fields: ['created_at']
+      },
+      {
+        fields: ['job_id']
+      }
+    ]
   }
 );

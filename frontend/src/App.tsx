@@ -1,70 +1,77 @@
-import React from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { Layout } from './components/layout/Layout';
-import { Dashboard } from './pages/Dashboard';
+import Dashboard from './components/Dashboard';
+import MessageForm from './components/MessageForm';
+import MessageHistory from './components/MessageHistory';
+import { Activity } from 'lucide-react';
 
-// Создаем QueryClient
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       refetchOnWindowFocus: false,
-      retry: 1,
-    },
-  },
+      retry: 1
+    }
+  }
 });
-
-// Временные страницы-заглушки
-const SendMessage = () => (
-  <div className="bg-white rounded-lg shadow p-6">
-    <h1 className="text-2xl font-bold">Send Message</h1>
-    <p className="text-gray-600 mt-2">Coming soon...</p>
-  </div>
-);
-
-const QueueMonitor = () => (
-  <div className="bg-white rounded-lg shadow p-6">
-    <h1 className="text-2xl font-bold">Queue Monitor</h1>
-    <p className="text-gray-600 mt-2">Coming soon...</p>
-  </div>
-);
-
-const Integrations = () => (
-  <div className="bg-white rounded-lg shadow p-6">
-    <h1 className="text-2xl font-bold">Integrations</h1>
-    <p className="text-gray-600 mt-2">Coming soon...</p>
-  </div>
-);
-
-const Analytics = () => (
-  <div className="bg-white rounded-lg shadow p-6">
-    <h1 className="text-2xl font-bold">Analytics</h1>
-    <p className="text-gray-600 mt-2">Coming soon...</p>
-  </div>
-);
-
-const Settings = () => (
-  <div className="bg-white rounded-lg shadow p-6">
-    <h1 className="text-2xl font-bold">Settings</h1>
-    <p className="text-gray-600 mt-2">Coming soon...</p>
-  </div>
-);
 
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
-        <Layout>
-          <Routes>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/send" element={<SendMessage />} />
-            <Route path="/queue" element={<QueueMonitor />} />
-            <Route path="/integrations" element={<Integrations />} />
-            <Route path="/analytics" element={<Analytics />} />
-            <Route path="/settings" element={<Settings />} />
-          </Routes>
-        </Layout>
-      </BrowserRouter>
+      <Router>
+        <div className="min-h-screen bg-gray-50">
+          {/* Header */}
+          <header className="bg-white shadow-sm">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+              <div className="flex justify-between items-center py-4">
+                <div className="flex items-center space-x-3">
+                  <Activity className="w-8 h-8 text-blue-600" />
+                  <h1 className="text-2xl font-bold text-gray-900">
+                    AI.LEAD v2
+                  </h1>
+                </div>
+                <nav className="flex space-x-6">
+                  <Link
+                    to="/"
+                    className="text-gray-700 hover:text-blue-600 font-medium transition"
+                  >
+                    Dashboard
+                  </Link>
+                  <Link
+                    to="/send"
+                    className="text-gray-700 hover:text-blue-600 font-medium transition"
+                  >
+                    Отправить сообщение
+                  </Link>
+                  <Link
+                    to="/history"
+                    className="text-gray-700 hover:text-blue-600 font-medium transition"
+                  >
+                    История
+                  </Link>
+                </nav>
+              </div>
+            </div>
+          </header>
+
+          {/* Main Content */}
+          <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <Routes>
+              <Route path="/" element={<Dashboard />} />
+              <Route path="/send" element={<MessageForm />} />
+              <Route path="/history" element={<MessageHistory />} />
+            </Routes>
+          </main>
+
+          {/* Footer */}
+          <footer className="bg-white border-t border-gray-200 mt-12">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+              <p className="text-center text-gray-500 text-sm">
+                AI.LEAD v2 - Автоматизация сообщений для amoCRM
+              </p>
+            </div>
+          </footer>
+        </div>
+      </Router>
     </QueryClientProvider>
   );
 }

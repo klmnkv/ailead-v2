@@ -1,7 +1,6 @@
-import { messageQueue } from '../config/queue.js';
-import { redisClient } from '../config/redis.js';
-import { logger } from '../utils/logger.js';
 import { Job } from 'bull';
+import { messageQueue } from '../config/queue.js';
+import { logger } from '../utils/logger.js';
 
 export interface MessageTaskData {
   account_id: number;
@@ -15,114 +14,87 @@ export interface MessageTaskData {
   expiry: number;
 }
 
+interface AddTaskOptions {
+  priority?: number;
+  delay?: number;
+  attempts?: number;
+}
+
 class QueueService {
   /**
-   * Добавить задачу в очередь с учетом rate limiting
+   * Добавляет задачу отправки сообщения в очередь
    */
   async addMessageTask(
     data: MessageTaskData,
-    options?: {
-      priority?: number;
-      delay?: number;
-    }
+    options: AddTaskOptions = {}
   ): Promise<Job<MessageTaskData>> {
-    const { account_id, lead_id } = data;
+    const { priority = 5, delay = 0, attempts = 3 } = options;
 
-    // Rate limiting: max 30 сообщений в минуту на аккаунт
-    const rateLimitKey = `rate:${account_id}:${Math.floor(Date.now() / 60000)}`;
-    const count = await redisClient.incr(rateLimitKey);
-    await redisClient.expire(rateLimitKey, 60);
-
-    if (count > 30) {
-      logger.warn(`Rate limit exceeded for account ${account_id}`);
-      throw new Error('Rate limit exceeded: max 30 messages per minute');
-    }
-
-    // Проверяем дубликаты (тот же лид в последние 5 секунд)
-    const dedupeKey = `dedupe:${account_id}:${lead_id}`;
-    const exists = await redisClient.get(dedupeKey);
-
-    if (exists) {
-      logger.warn(`Duplicate request for account ${account_id}, lead ${lead_id}`);
-      throw new Error('Duplicate request: message to this lead was sent recently');
-    }
-
-    await redisClient.setEx(dedupeKey, 5, '1');
-
-    // Добавляем в очередь
     const job = await messageQueue.add(data, {
-      jobId: `msg_${account_id}_${lead_id}_${Date.now()}`,
-      priority: options?.priority || 5,
-      delay: options?.delay || 0,
-      attempts: 3,
+      priority,
+      delay,
+      attempts,
       backoff: {
         type: 'exponential',
         delay: 2000
       }
     });
 
-    logger.info(`Job ${job.id} added to queue`, { account_id, lead_id });
+    logger.info(`Job created: ${job.id}`, {
+      account_id: data.account_id,
+      lead_id: data.lead_id,
+      priority
+    });
 
     return job;
   }
 
   /**
-   * Получить задачу по ID
+   * Получает задачу по ID
    */
   async getJob(jobId: string): Promise<Job<MessageTaskData> | null> {
     return await messageQueue.getJob(jobId);
   }
 
   /**
-   * Получить позицию задачи в очереди
-   */
-  async getJobPosition(jobId: string): Promise<number> {
-    const waitingJobs = await messageQueue.getWaiting();
-    const index = waitingJobs.findIndex(job => job.id?.toString() === jobId);
-    return index >= 0 ? index + 1 : 0;
-  }
-
-  /**
-   * Получить статистику очередей
+   * Получает статистику очередей
    */
   async getStats() {
-    const [waiting, active, completed, failed, delayed] = await Promise.all([
+    const [waiting, active, completed, failed, delayed, paused] = await Promise.all([
       messageQueue.getWaitingCount(),
       messageQueue.getActiveCount(),
       messageQueue.getCompletedCount(),
       messageQueue.getFailedCount(),
-      messageQueue.getDelayedCount()
+      messageQueue.getDelayedCount(),
+      messageQueue.isPaused()
     ]);
 
-    // Производительность за последние 100 задач
+    // Получаем последние 100 завершённых задач для расчёта метрик
     const completedJobs = await messageQueue.getCompleted(0, 100);
-    const failedJobs = await messageQueue.getFailed(0, 100);
 
     let avgTime = 0;
     if (completedJobs.length > 0) {
       const totalTime = completedJobs.reduce((sum, job) => {
-        const time = job.finishedOn && job.processedOn
-          ? job.finishedOn - job.processedOn
-          : 0;
-        return sum + time;
+        if (job.finishedOn && job.processedOn) {
+          return sum + (job.finishedOn - job.processedOn);
+        }
+        return sum;
       }, 0);
-      avgTime = Math.round(totalTime / completedJobs.length);
+      avgTime = totalTime / completedJobs.length;
     }
 
-    const totalProcessed = completedJobs.length + failedJobs.length;
-    const successRate = totalProcessed > 0
-      ? Math.round((completedJobs.length / totalProcessed) * 100)
+    const successRate = (completed + failed) > 0
+      ? (completed / (completed + failed)) * 100
       : 0;
 
-    // Jobs per minute (последние 100 задач)
+    // Считаем jobs per minute на основе последних завершённых задач
     let jobsPerMinute = 0;
     if (completedJobs.length > 1) {
-      const newestJob = completedJobs[0];
-      const oldestJob = completedJobs[completedJobs.length - 1];
-
-      if (newestJob.finishedOn && oldestJob.finishedOn) {
-        const timeRange = (newestJob.finishedOn - oldestJob.finishedOn) / 1000 / 60;
-        jobsPerMinute = timeRange > 0 ? Math.round((completedJobs.length / timeRange) * 10) / 10 : 0;
+      const firstJob = completedJobs[completedJobs.length - 1];
+      const lastJob = completedJobs[0];
+      if (firstJob.finishedOn && lastJob.finishedOn) {
+        const timeSpanMinutes = (lastJob.finishedOn - firstJob.finishedOn) / 60000;
+        jobsPerMinute = timeSpanMinutes > 0 ? completedJobs.length / timeSpanMinutes : 0;
       }
     }
 
@@ -132,31 +104,86 @@ class QueueService {
       completed,
       failed,
       delayed,
-      paused: await messageQueue.isPaused(),
+      paused,
       performance: {
-        avg_processing_time: avgTime,
-        jobs_per_minute: jobsPerMinute,
-        success_rate: successRate
+        avg_processing_time: Math.round(avgTime),
+        jobs_per_minute: Math.round(jobsPerMinute * 10) / 10,
+        success_rate: Math.round(successRate * 10) / 10
       }
     };
   }
 
   /**
-   * Очистить завершенные задачи
+   * Получает позицию задачи в очереди
    */
-  async cleanCompleted(grace: number = 3600000): Promise<number> {
-    const jobs = await messageQueue.clean(grace, 'completed');
-    logger.info(`Cleaned ${jobs.length} completed jobs`);
-    return jobs.length;
+  async getJobPosition(jobId: string): Promise<number> {
+    const waitingJobs = await messageQueue.getWaiting();
+    const position = waitingJobs.findIndex(job => job.id?.toString() === jobId);
+    return position >= 0 ? position + 1 : 0;
   }
 
   /**
-   * Очистить упавшие задачи
+   * Проверяет rate limit для аккаунта (простая реализация)
+   * TODO: Улучшить с использованием Redis для точного rate limiting
    */
-  async cleanFailed(grace: number = 86400000): Promise<number> {
-    const jobs = await messageQueue.clean(grace, 'failed');
-    logger.info(`Cleaned ${jobs.length} failed jobs`);
-    return jobs.length;
+  async checkRateLimit(accountId: number): Promise<boolean> {
+    const activeJobs = await messageQueue.getActive();
+    const accountActiveJobs = activeJobs.filter(
+      job => job.data.account_id === accountId
+    );
+
+    // Лимит: максимум 10 активных задач на аккаунт
+    const MAX_CONCURRENT_PER_ACCOUNT = 10;
+    return accountActiveJobs.length < MAX_CONCURRENT_PER_ACCOUNT;
+  }
+
+  /**
+   * Очищает старые задачи
+   */
+  async cleanup() {
+    logger.info('Running queue cleanup...');
+
+    // Удаляем completed задачи старше 24 часов
+    const completedCleaned = await messageQueue.clean(24 * 60 * 60 * 1000, 'completed');
+    logger.info(`Cleaned ${completedCleaned.length} completed jobs`);
+
+    // Удаляем failed задачи старше 7 дней
+    const failedCleaned = await messageQueue.clean(7 * 24 * 60 * 60 * 1000, 'failed');
+    logger.info(`Cleaned ${failedCleaned.length} failed jobs`);
+  }
+
+  /**
+   * Получает список failed задач для отладки
+   */
+  async getFailedJobs(limit: number = 50) {
+    return await messageQueue.getFailed(0, limit);
+  }
+
+  /**
+   * Повторяет неудавшуюся задачу
+   */
+  async retryFailedJob(jobId: string): Promise<void> {
+    const job = await this.getJob(jobId);
+    if (job) {
+      await job.retry();
+      logger.info(`Job ${jobId} queued for retry`);
+    }
+  }
+
+  /**
+   * Приостанавливает очередь
+   */
+  async pauseQueue(): Promise<void> {
+    await messageQueue.pause();
+    logger.warn('Message queue paused');
+  }
+
+  /**
+   * Возобновляет очередь
+   */
+  async resumeQueue(): Promise<void> {
+    await messageQueue.resume();
+    logger.info('Message queue resumed');
   }
 }
 

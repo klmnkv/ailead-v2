@@ -2,20 +2,40 @@ import { Model, DataTypes } from 'sequelize';
 import { sequelize } from '../config/database.js';
 import CryptoJS from 'crypto-js';
 
-const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || 'your_encryption_key_must_be_exactly_32_characters_long';
+const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || 'default_key_change_in_production_32c';
+
+/**
+ * Шифрует токен
+ */
+function encryptToken(token: string): string {
+  return CryptoJS.AES.encrypt(token, ENCRYPTION_KEY).toString();
+}
+
+/**
+ * Расшифровывает токен
+ */
+function decryptToken(encrypted: string): string {
+  try {
+    const bytes = CryptoJS.AES.decrypt(encrypted, ENCRYPTION_KEY);
+    return bytes.toString(CryptoJS.enc.Utf8);
+  } catch (error) {
+    console.error('Token decryption failed:', error);
+    return '';
+  }
+}
 
 export class Integration extends Model {
-  declare id: number;
-  declare account_id: number;
-  declare amocrm_account_id: number;
-  declare base_url: string;
-  declare access_token: string;
-  declare refresh_token: string;
-  declare token_expiry: number;
-  declare status: string;
-  declare last_sync_at: Date | null;
-  declare created_at: Date;
-  declare updated_at: Date;
+  public id!: number;
+  public account_id!: number;
+  public amocrm_account_id!: number;
+  public base_url!: string;
+  public access_token!: string;
+  public refresh_token!: string;
+  public token_expiry!: number;
+  public status!: string;
+  public last_sync_at?: Date;
+  public readonly created_at!: Date;
+  public readonly updated_at!: Date;
 }
 
 Integration.init(
@@ -27,7 +47,12 @@ Integration.init(
     },
     account_id: {
       type: DataTypes.INTEGER,
-      allowNull: false
+      allowNull: false,
+      references: {
+        model: 'accounts',
+        key: 'id'
+      },
+      onDelete: 'CASCADE'
     },
     amocrm_account_id: {
       type: DataTypes.INTEGER,
@@ -35,24 +60,20 @@ Integration.init(
     },
     base_url: {
       type: DataTypes.STRING(255),
-      allowNull: false
+      allowNull: false,
+      validate: {
+        isUrl: true
+      }
     },
     access_token: {
       type: DataTypes.TEXT,
       allowNull: false,
       get() {
         const encrypted = this.getDataValue('access_token');
-        if (!encrypted) return '';
-        try {
-          const decrypted = CryptoJS.AES.decrypt(encrypted, ENCRYPTION_KEY);
-          return decrypted.toString(CryptoJS.enc.Utf8);
-        } catch (error) {
-          return encrypted; // Если не зашифровано, возвращаем как есть
-        }
+        return encrypted ? decryptToken(encrypted) : '';
       },
       set(value: string) {
-        const encrypted = CryptoJS.AES.encrypt(value, ENCRYPTION_KEY).toString();
-        this.setDataValue('access_token', encrypted);
+        this.setDataValue('access_token', encryptToken(value));
       }
     },
     refresh_token: {
@@ -60,26 +81,23 @@ Integration.init(
       allowNull: false,
       get() {
         const encrypted = this.getDataValue('refresh_token');
-        if (!encrypted) return '';
-        try {
-          const decrypted = CryptoJS.AES.decrypt(encrypted, ENCRYPTION_KEY);
-          return decrypted.toString(CryptoJS.enc.Utf8);
-        } catch (error) {
-          return encrypted;
-        }
+        return encrypted ? decryptToken(encrypted) : '';
       },
       set(value: string) {
-        const encrypted = CryptoJS.AES.encrypt(value, ENCRYPTION_KEY).toString();
-        this.setDataValue('refresh_token', encrypted);
+        this.setDataValue('refresh_token', encryptToken(value));
       }
     },
     token_expiry: {
       type: DataTypes.INTEGER,
-      allowNull: false
+      allowNull: false,
+      comment: 'Unix timestamp of token expiry'
     },
     status: {
       type: DataTypes.STRING(50),
-      defaultValue: 'active'
+      defaultValue: 'active',
+      validate: {
+        isIn: [['active', 'inactive', 'expired', 'error']]
+      }
     },
     last_sync_at: {
       type: DataTypes.DATE,
@@ -90,6 +108,15 @@ Integration.init(
     sequelize,
     tableName: 'integrations',
     underscored: true,
-    timestamps: true
+    timestamps: true,
+    indexes: [
+      {
+        unique: true,
+        fields: ['account_id', 'amocrm_account_id']
+      },
+      {
+        fields: ['status']
+      }
+    ]
   }
 );

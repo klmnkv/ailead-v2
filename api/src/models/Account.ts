@@ -2,14 +2,14 @@ import { Model, DataTypes } from 'sequelize';
 import { sequelize } from '../config/database.js';
 
 export class Account extends Model {
-  declare id: number;
-  declare email: string;
-  declare password_hash: string;
-  declare company_name: string | null;
-  declare subscription_plan: string;
-  declare token_balance: number;
-  declare created_at: Date;
-  declare updated_at: Date;
+  public id!: number;
+  public email!: string;
+  public password_hash!: string;
+  public company_name?: string;
+  public subscription_plan!: string;
+  public token_balance!: number;
+  public readonly created_at!: Date;
+  public readonly updated_at!: Date;
 }
 
 Account.init(
@@ -37,11 +37,17 @@ Account.init(
     },
     subscription_plan: {
       type: DataTypes.STRING(50),
-      defaultValue: 'free'
+      defaultValue: 'free',
+      validate: {
+        isIn: [['free', 'basic', 'pro', 'enterprise']]
+      }
     },
     token_balance: {
       type: DataTypes.INTEGER,
-      defaultValue: 1000
+      defaultValue: 1000,
+      validate: {
+        min: 0
+      }
     }
   },
   {
