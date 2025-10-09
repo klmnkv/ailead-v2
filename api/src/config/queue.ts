@@ -1,14 +1,12 @@
-import Bull from 'bull';
+import 'dotenv/config'; // ДОБАВЬТЕ ЭТУ СТРОКУ В НАЧАЛО
+import Queue from 'bull';
 import { logger } from '../utils/logger.js';
 
 const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
 
-// Логируем подключение Bull Queue
-const maskedUrl = REDIS_URL.replace(/:[^:@]+@/, ':***@');
-logger.info(`📋 Bull Queue connecting to: ${maskedUrl}`);
+console.log('🔍 REDIS_URL:', REDIS_URL); // DEBUG: проверим что читается
 
-// Очередь для отправки сообщений
-export const messageQueue = new Bull('messages', REDIS_URL, {
+export const messageQueue = new Queue('messages', REDIS_URL, {
   defaultJobOptions: {
     attempts: 3,
     backoff: {
@@ -17,33 +15,19 @@ export const messageQueue = new Bull('messages', REDIS_URL, {
     },
     removeOnComplete: 100,
     removeOnFail: 500
-  },
-  settings: {
-    maxStalledCount: 2,
-    stalledInterval: 30000,
-    lockDuration: 120000
   }
 });
 
-// Events
 messageQueue.on('error', (error) => {
-  logger.error('❌ Queue error:', error.message);
-});
-
-messageQueue.on('waiting', (jobId) => {
-  logger.debug(`⏳ Job ${jobId} is waiting`);
-});
-
-messageQueue.on('active', (job) => {
-  logger.info(`🔄 Job ${job.id} started processing`);
+  logger.error('Queue error:', error);
 });
 
 messageQueue.on('completed', (job, result) => {
-  logger.info(`✅ Job ${job.id} completed`);
+  logger.info(`Job ${job.id} completed`, { result });
 });
 
 messageQueue.on('failed', (job, err) => {
-  logger.error(`❌ Job ${job?.id} failed:`, err.message);
+  logger.error(`Job ${job?.id} failed`, { error: err.message });
 });
 
-logger.info('✅ Bull Queue initialized');
+logger.info('Message queue initialized');

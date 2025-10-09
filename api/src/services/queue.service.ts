@@ -1,4 +1,4 @@
-    import { messageQueue } from '../config/queue.js';
+import { messageQueue } from '../config/queue.js';
 import { redisClient } from '../config/redis.js';
 import { logger } from '../utils/logger.js';
 import { Job } from 'bull';
@@ -34,6 +34,7 @@ class QueueService {
     await redisClient.expire(rateLimitKey, 60);
 
     if (count > 30) {
+      logger.warn(`Rate limit exceeded for account ${account_id}`);
       throw new Error('Rate limit exceeded: max 30 messages per minute');
     }
 
@@ -42,6 +43,7 @@ class QueueService {
     const exists = await redisClient.get(dedupeKey);
 
     if (exists) {
+      logger.warn(`Duplicate request for account ${account_id}, lead ${lead_id}`);
       throw new Error('Duplicate request: message to this lead was sent recently');
     }
 
@@ -65,6 +67,22 @@ class QueueService {
   }
 
   /**
+   * Получить задачу по ID
+   */
+  async getJob(jobId: string): Promise<Job<MessageTaskData> | null> {
+    return await messageQueue.getJob(jobId);
+  }
+
+  /**
+   * Получить позицию задачи в очереди
+   */
+  async getJobPosition(jobId: string): Promise<number> {
+    const waitingJobs = await messageQueue.getWaiting();
+    const index = waitingJobs.findIndex(job => job.id?.toString() === jobId);
+    return index >= 0 ? index + 1 : 0;
+  }
+
+  /**
    * Получить статистику очередей
    */
   async getStats() {
@@ -76,8 +94,9 @@ class QueueService {
       messageQueue.getDelayedCount()
     ]);
 
-    // Производительность за последние 1000 задач
-    const completedJobs = await messageQueue.getCompleted(0, 1000);
+    // Производительность за последние 100 задач
+    const completedJobs = await messageQueue.getCompleted(0, 100);
+    const failedJobs = await messageQueue.getFailed(0, 100);
 
     let avgTime = 0;
     if (completedJobs.length > 0) {
@@ -87,12 +106,25 @@ class QueueService {
           : 0;
         return sum + time;
       }, 0);
-      avgTime = totalTime / completedJobs.length;
+      avgTime = Math.round(totalTime / completedJobs.length);
     }
 
-    const successRate = completed > 0
-      ? (completed / (completed + failed)) * 100
-      : 100;
+    const totalProcessed = completedJobs.length + failedJobs.length;
+    const successRate = totalProcessed > 0
+      ? Math.round((completedJobs.length / totalProcessed) * 100)
+      : 0;
+
+    // Jobs per minute (последние 100 задач)
+    let jobsPerMinute = 0;
+    if (completedJobs.length > 1) {
+      const newestJob = completedJobs[0];
+      const oldestJob = completedJobs[completedJobs.length - 1];
+
+      if (newestJob.finishedOn && oldestJob.finishedOn) {
+        const timeRange = (newestJob.finishedOn - oldestJob.finishedOn) / 1000 / 60;
+        jobsPerMinute = timeRange > 0 ? Math.round((completedJobs.length / timeRange) * 10) / 10 : 0;
+      }
+    }
 
     return {
       waiting,
@@ -100,40 +132,31 @@ class QueueService {
       completed,
       failed,
       delayed,
+      paused: await messageQueue.isPaused(),
       performance: {
-        avg_processing_time: Math.round(avgTime),
-        jobs_per_minute: completedJobs.length / 60,
-        success_rate: Math.round(successRate * 10) / 10
+        avg_processing_time: avgTime,
+        jobs_per_minute: jobsPerMinute,
+        success_rate: successRate
       }
     };
   }
 
   /**
-   * Получить позицию задачи в очереди
+   * Очистить завершенные задачи
    */
-  async getJobPosition(jobId: string): Promise<number> {
-    const waitingJobs = await messageQueue.getWaiting();
-    return waitingJobs.findIndex(job => job.id === jobId) + 1;
+  async cleanCompleted(grace: number = 3600000): Promise<number> {
+    const jobs = await messageQueue.clean(grace, 'completed');
+    logger.info(`Cleaned ${jobs.length} completed jobs`);
+    return jobs.length;
   }
 
   /**
-   * Получить задачу по ID
+   * Очистить упавшие задачи
    */
-  async getJob(jobId: string): Promise<Job<MessageTaskData> | null> {
-    return await messageQueue.getJob(jobId);
-  }
-
-  /**
-   * Очистить старые задачи
-   */
-  async cleanup() {
-    const oneDayAgo = 24 * 60 * 60 * 1000;
-    const oneWeekAgo = 7 * 24 * 60 * 60 * 1000;
-
-    await messageQueue.clean(oneDayAgo, 'completed');
-    await messageQueue.clean(oneWeekAgo, 'failed');
-
-    logger.info('Queue cleanup completed');
+  async cleanFailed(grace: number = 86400000): Promise<number> {
+    const jobs = await messageQueue.clean(grace, 'failed');
+    logger.info(`Cleaned ${jobs.length} failed jobs`);
+    return jobs.length;
   }
 }
 

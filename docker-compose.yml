@@ -39,6 +39,34 @@ services:
     networks:
       - ailead-network
 
+  # API Server
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    container_name: ailead_api
+    environment:
+      NODE_ENV: development
+      PORT: 4000
+      DATABASE_URL: postgres://ailead:${DB_PASSWORD:-ailead_password}@postgres:5432/ailead
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: ${JWT_SECRET:-dev_jwt_secret}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-dev_encryption_key_32_chars_len}
+      LOG_LEVEL: info
+    ports:
+      - "4000:4000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./api/logs:/app/logs
+      - ./api/src:/app/src  # Hot reload для разработки
+    networks:
+      - ailead-network
+    restart: unless-stopped
+
 volumes:
   postgres_data:
   redis_data:

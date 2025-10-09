@@ -1,34 +1,25 @@
+import 'dotenv/config'; // ДОБАВЬТЕ ЭТУ СТРОКУ В НАЧАЛО
 import { createClient } from 'redis';
 import { logger } from '../utils/logger.js';
 
 const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
 
-// Логируем подключение (скрываем пароль)
-const maskedUrl = REDIS_URL.replace(/:[^:@]+@/, ':***@');
-logger.info(`📡 Connecting to Redis: ${maskedUrl}`);
+console.log('🔍 REDIS_URL:', REDIS_URL); // DEBUG: проверим что читается
 
 export const redisClient = createClient({
-  url: REDIS_URL,
-  socket: {
-    reconnectStrategy: (retries) => {
-      if (retries > 10) {
-        logger.error('❌ Redis connection failed after 10 retries');
-        return new Error('Redis connection failed');
-      }
-      logger.warn(`⚠️ Redis retry ${retries}/10...`);
-      return retries * 1000;
-    }
-  }
+  url: REDIS_URL
 });
 
 redisClient.on('error', (err) => {
-  logger.error('❌ Redis Client Error:', err.message);
+  logger.error('Redis Client Error', err);
 });
 
 redisClient.on('connect', () => {
-  logger.info('🔌 Redis Client Connecting...');
+  logger.info('Redis connected');
 });
 
-redisClient.on('ready', () => {
-  logger.info('✅ Redis Client Ready');
-});
+export const connectRedis = async () => {
+  if (!redisClient.isOpen) {
+    await redisClient.connect();
+  }
+};
