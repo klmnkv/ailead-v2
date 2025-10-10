@@ -74,6 +74,22 @@ export interface QueueStats {
   };
 }
 
+// 👇 НОВЫЕ ТИПЫ
+export interface DailyStats {
+  processed_leads: number;
+  processed_leads_change: number;
+  messages_sent: number;
+  messages_sent_change: number;
+  successful_dialogs: number;
+  successful_dialogs_change: number;
+}
+
+export interface BotConfig {
+  auto_process: boolean;
+  prompt: string;
+  updated_at?: string;
+}
+
 // ============================================
 // API МЕТОДЫ
 // ============================================
@@ -101,6 +117,32 @@ export const api = {
   // Статистика очередей
   getQueueStats: async (): Promise<QueueStats> => {
     const response = await apiClient.get('/api/queue/stats');
+    return response.data;
+  },
+
+  // 👇 НОВЫЕ МЕТОДЫ
+
+  // Статистика за сегодня
+  getDailyStats: async (): Promise<DailyStats> => {
+    const response = await apiClient.get('/api/stats/today');
+    return response.data;
+  },
+
+  // Получить настройки бота
+  getBotConfig: async (): Promise<BotConfig> => {
+    const response = await apiClient.get('/api/bot/config');
+    return response.data;
+  },
+
+  // Сохранить настройки бота
+  saveBotConfig: async (config: Partial<BotConfig>): Promise<BotConfig> => {
+    const response = await apiClient.put('/api/bot/config', config);
+    return response.data;
+  },
+
+  // Тестировать промпт
+  testBotPrompt: async (data: { prompt: string }): Promise<{ success: boolean }> => {
+    const response = await apiClient.post('/api/bot/test', data);
     return response.data;
   },
 
