@@ -1,63 +1,63 @@
-import express from 'express';
-import cors from 'cors';
-import http from 'http';
-import { Server as SocketIOServer } from 'socket.io';
-import messageRoutes from './routes/messages';
-import queueRoutes from './routes/queue';
-import statsRoutes from './routes/stats'; // 👈 НОВОЕ
-import botRoutes from './routes/bot'; // 👈 НОВОЕ
-import { sequelize } from './config/database';
-import { setupQueues } from './queues/setup';
-import logger from './utils/logger';
+import 'dotenv/config';
 
-const app = express();
-const server = http.createServer(app);
+import { httpServer } from './app.js';
+import { sequelize } from './config/database.js';
+import { connectRedis } from './config/redis.js';
+import { logger } from './utils/logger.js';
 
-// CORS
-app.use(cors());
-app.use(express.json());
+const PORT = process.env.PORT || 4000;
 
-// Health check
-app.get('/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
-});
+async function start() {
+  try {
+    logger.info('🚀 Starting AI.LEAD API Server...');
 
-// Routes
-app.use('/api/messages', messageRoutes);
-app.use('/api/queue', queueRoutes);
-app.use('/api/stats', statsRoutes); // 👈 НОВОЕ
-app.use('/api/bot', botRoutes); // 👈 НОВОЕ
+    // Подключение к базе данных
+    await sequelize.authenticate();
+    logger.info('✅ Database connected');
 
-// WebSocket
-const io = new SocketIOServer(server, {
-  cors: { origin: '*' },
-});
+    // Загружаем модели
+    logger.info('📦 Loading models...');
 
-io.on('connection', (socket) => {
-  logger.info('Client connected');
-  socket.on('disconnect', () => {
-    logger.info('Client disconnected');
+    // Синхронизация моделей (только для dev)
+    if (process.env.NODE_ENV === 'development') {
+      logger.info('🔄 Syncing database models...');
+      await sequelize.sync({ alter: true });
+      logger.info('✅ Database models synced');
+    }
+
+    // Подключение к Redis
+    await connectRedis();
+    logger.info('✅ Redis connected');
+
+    // Запуск HTTP сервера
+    httpServer.listen(PORT, () => {
+      logger.info(`🚀 Server running on port ${PORT}`);
+      logger.info(`📊 Health check: http://localhost:${PORT}/health`);
+      logger.info(`📡 WebSocket ready on ws://localhost:${PORT}`);
+      logger.info(`🔗 API endpoints: http://localhost:${PORT}/api`);
+    });
+
+  } catch (error) {
+    logger.error('❌ Failed to start server:', error);
+    process.exit(1);
+  }
+}
+
+// Graceful shutdown
+process.on('SIGTERM', async () => {
+  logger.info('SIGTERM received, shutting down gracefully...');
+  httpServer.close(() => {
+    logger.info('HTTP server closed');
+    process.exit(0);
   });
 });
 
-// Start server
-const PORT = process.env.PORT || 4000;
+process.on('SIGINT', async () => {
+  logger.info('SIGINT received, shutting down gracefully...');
+  httpServer.close(() => {
+    logger.info('HTTP server closed');
+    process.exit(0);
+  });
+});
 
-(async () => {
-  try {
-    await sequelize.authenticate();
-    logger.info('Database connected');
-
-    await setupQueues(io);
-    logger.info('Queues initialized');
-
-    server.listen(PORT, () => {
-      logger.info(`API Server running on port ${PORT}`);
-    });
-  } catch (error) {
-    logger.error('Failed to start server:', error);
-    process.exit(1);
-  }
-})();
-
-export { io };
+start();
