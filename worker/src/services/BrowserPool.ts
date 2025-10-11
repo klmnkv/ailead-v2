@@ -12,7 +12,7 @@ interface BrowserPoolConfig {
   minBrowsers?: number;
   maxBrowsers?: number;
   maxPagesPerBrowser?: number;
-  pageTimeout?: number; // ms до закрытия неиспользуемой страницы
+  pageTimeout?: number;
   reusePages?: boolean;
 }
 
@@ -85,6 +85,12 @@ class BrowserPool {
    */
   async getPage(accountId: number, leadId: number): Promise<Page> {
     const key = `${accountId}:${leadId}`;
+
+    // ✅ ЗАЩИТА: Проверка что пул инициализирован
+    if (this.browsers.length === 0) {
+      logger.warn('⚠️  Browser pool not initialized, initializing now...');
+      await this.initialize();
+    }
 
     // Проверяем, есть ли уже страница для этого аккаунта и лида
     if (this.config.reusePages && this.pageContexts.has(key)) {

@@ -13,23 +13,28 @@ export const sendMessage = async (
   try {
     const { account_id, lead_id, message_text, note_text, task_text, priority } = req.body;
 
-    // Валидация
     if (!account_id || !lead_id || !message_text) {
       throw new AppError(400, 'Missing required fields: account_id, lead_id, message_text');
     }
 
-    // Получаем интеграцию из БД
+    logger.info(`📨 Sending message to lead ${lead_id} from amoCRM account ${account_id}`);
+
     const integration = await Integration.findOne({
-      where: { account_id, status: 'active' }
+      where: { amocrm_account_id: account_id, status: 'active' }
     });
 
     if (!integration) {
-      throw new AppError(404, `No active integration found for account ${account_id}`);
+      throw new AppError(404, `No active integration found for amoCRM account ${account_id}`);
     }
 
-    // Создаем запись в messages
+    logger.info(`✅ Integration found: ${integration.id}`, {
+      account_id: integration.account_id,
+      amocrm_account_id: integration.amocrm_account_id,
+      domain: integration.domain
+    });
+
     const messageRecord = await Message.create({
-      account_id,
+      account_id: integration.account_id,
       integration_id: integration.id,
       lead_id,
       message_text,
@@ -38,7 +43,8 @@ export const sendMessage = async (
       status: 'pending'
     });
 
-    // Добавляем в очередь
+    logger.info(`✅ Message record created: ${messageRecord.id}`);
+
     const job = await queueService.addMessageTask(
       {
         account_id,
@@ -49,26 +55,31 @@ export const sendMessage = async (
         message_text,
         note_text,
         task_text,
-        expiry: integration.token_expiry
+        expiry: integration.token_expiry,
+        email: integration.email,
+        password: integration.password
       },
       {
         priority: priority === 'high' ? 1 : priority === 'low' ? 10 : 5
       }
     );
 
-    // Обновляем job_id в БД
+    logger.info(`Job created: ${job.id}`, { account_id, lead_id, priority: priority || 'normal' });
+
     await messageRecord.update({ job_id: job.id?.toString() });
+    logger.info(`✅ Job ID updated in message record: ${job.id}`);
 
-    // Отправляем событие в WebSocket
     const io = req.app.get('io');
-    io.emit('task:created', {
-      job_id: job.id,
-      account_id,
-      lead_id,
-      status: 'queued'
-    });
+    if (io) {
+      io.emit('task:created', {
+        job_id: job.id,
+        account_id,
+        lead_id,
+        status: 'queued'
+      });
+    }
 
-    logger.info(`Message queued: ${job.id}`, { account_id, lead_id });
+    logger.info(`✅ Message queued successfully: ${job.id}`, { account_id, lead_id });
 
     res.status(200).json({
       job_id: job.id,

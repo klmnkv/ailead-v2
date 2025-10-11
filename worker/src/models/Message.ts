@@ -1,27 +1,36 @@
-import { Model, DataTypes } from 'sequelize';
+import { DataTypes, Model, Optional } from 'sequelize';
 import { sequelize } from '../config/database.js';
 
-export class Message extends Model {
-  public id!: number;
-  public account_id!: number;
-  public integration_id?: number;
-  public lead_id!: number;
-  public message_text!: string;
-  public message_type!: string;
-  public direction!: string;
-  public status!: string;
-  public processing_time?: number;
-  public error_message?: string;
-  public screenshot_url?: string;
-  public job_id?: string;
-  public readonly created_at!: Date;
-  public sent_at?: Date;
+interface MessageAttributes {
+  id: number;
+  account_id: number;
+  integration_id: number;
+  lead_id: number;
+  message_text: string;
+  message_type: 'chat' | 'note' | 'task';
+  direction: 'incoming' | 'outgoing';
+  status: 'pending' | 'sent' | 'failed';
+  processing_time?: number;
+  error_message?: string;
+  screenshot_url?: string;
+  job_id?: string;
+  sent_at?: Date;
+  created_at?: Date;
+  updated_at?: Date;
 }
+
+interface MessageCreationAttributes
+  extends Optional<MessageAttributes, 'id' | 'created_at' | 'updated_at' | 'sent_at' | 'processing_time' | 'error_message' | 'screenshot_url' | 'job_id'> {}
+
+export class Message extends Model<
+  MessageAttributes,
+  MessageCreationAttributes
+> {}
 
 Message.init(
   {
     id: {
-      type: DataTypes.BIGINT,
+      type: DataTypes.INTEGER,
       autoIncrement: true,
       primaryKey: true
     },
@@ -31,7 +40,7 @@ Message.init(
     },
     integration_id: {
       type: DataTypes.INTEGER,
-      allowNull: true
+      allowNull: false
     },
     lead_id: {
       type: DataTypes.INTEGER,
@@ -42,15 +51,18 @@ Message.init(
       allowNull: false
     },
     message_type: {
-      type: DataTypes.STRING(50),
+      type: DataTypes.STRING(20),
+      allowNull: false,
       defaultValue: 'chat'
     },
     direction: {
       type: DataTypes.STRING(20),
+      allowNull: false,
       defaultValue: 'outgoing'
     },
     status: {
-      type: DataTypes.STRING(50),
+      type: DataTypes.STRING(20),
+      allowNull: false,
       defaultValue: 'pending'
     },
     processing_time: {
@@ -62,23 +74,30 @@ Message.init(
       allowNull: true
     },
     screenshot_url: {
-      type: DataTypes.TEXT,
+      type: DataTypes.STRING(500),
       allowNull: true
     },
     job_id: {
-      type: DataTypes.STRING(255),
+      type: DataTypes.STRING(100),
       allowNull: true
     },
     sent_at: {
       type: DataTypes.DATE,
       allowNull: true
+    },
+    created_at: {
+      type: DataTypes.DATE,
+      defaultValue: DataTypes.NOW
+    },
+    updated_at: {
+      type: DataTypes.DATE,
+      defaultValue: DataTypes.NOW
     }
   },
   {
     sequelize,
     tableName: 'messages',
-    underscored: true,
     timestamps: true,
-    updatedAt: false
+    underscored: true
   }
 );

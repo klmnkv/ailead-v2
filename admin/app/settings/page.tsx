@@ -12,6 +12,9 @@ import {
   CheckCircle,
   Bot,
   TestTube,
+  Key,
+  Mail,
+  Lock,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { api } from '../../lib/api-client';
@@ -19,7 +22,7 @@ import { api } from '../../lib/api-client';
 type TabType = 'profile' | 'bot' | 'integrations' | 'notifications' | 'security' | 'advanced';
 
 export default function SettingsPage() {
-  const [activeTab, setActiveTab] = useState<TabType>('profile');
+  const [activeTab, setActiveTab] = useState<TabType>('bot');
   const [saved, setSaved] = useState(false);
 
   const handleSave = () => {
@@ -29,7 +32,7 @@ export default function SettingsPage() {
 
   const tabs = [
     { id: 'profile', label: 'Профиль', icon: User },
-    { id: 'bot', label: 'Настройки бота', icon: Bot }, // 👈 НОВОЕ
+    { id: 'bot', label: 'Настройки бота', icon: Bot },
     { id: 'integrations', label: 'Интеграции', icon: Zap },
     { id: 'notifications', label: 'Уведомления', icon: Bell },
     { id: 'security', label: 'Безопасность', icon: Shield },
@@ -75,7 +78,7 @@ export default function SettingsPage() {
         <div className="flex-1 bg-white rounded-lg shadow">
           <div className="p-6">
             {activeTab === 'profile' && <ProfileTab />}
-            {activeTab === 'bot' && <BotTab />} {/* 👈 НОВОЕ */}
+            {activeTab === 'bot' && <BotTab />}
             {activeTab === 'integrations' && <IntegrationsTab />}
             {activeTab === 'notifications' && <NotificationsTab />}
             {activeTab === 'security' && <SecurityTab />}
@@ -110,20 +113,67 @@ export default function SettingsPage() {
 }
 
 // ============================================
-// 🤖 ВКЛАДКА НАСТРОЕК БОТА
+// PROFILE TAB
 // ============================================
+function ProfileTab() {
+  const [profile, setProfile] = useState({
+    name: 'Admin',
+    email: 'admin@example.com',
+    company: 'AI.LEAD',
+  });
 
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-xl font-bold text-gray-900 mb-4">Профиль пользователя</h2>
+        <p className="text-gray-600">Управление информацией о вашем аккаунте</p>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-2">Имя</label>
+        <input
+          type="text"
+          value={profile.name}
+          onChange={(e) => setProfile({ ...profile, name: e.target.value })}
+          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
+        <input
+          type="email"
+          value={profile.email}
+          onChange={(e) => setProfile({ ...profile, email: e.target.value })}
+          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-2">Компания</label>
+        <input
+          type="text"
+          value={profile.company}
+          onChange={(e) => setProfile({ ...profile, company: e.target.value })}
+          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+        />
+      </div>
+    </div>
+  );
+}
+
+// ============================================
+// BOT TAB
+// ============================================
 function BotTab() {
   const queryClient = useQueryClient();
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
 
-  // Загрузка настроек бота
   const { data: config, isLoading } = useQuery({
     queryKey: ['botConfig'],
     queryFn: api.getBotConfig,
   });
 
-  // Мутация для сохранения
   const saveMutation = useMutation({
     mutationFn: api.saveBotConfig,
     onSuccess: () => {
@@ -132,7 +182,6 @@ function BotTab() {
     },
   });
 
-  // Мутация для тестирования
   const testMutation = useMutation({
     mutationFn: api.testBotPrompt,
   });
@@ -151,7 +200,7 @@ function BotTab() {
   };
 
   if (isLoading) {
-    return <div>Загрузка...</div>;
+    return <div className="text-center py-8">Загрузка...</div>;
   }
 
   return (
@@ -200,9 +249,7 @@ function BotTab() {
       {lastSaved && (
         <div className="flex items-center space-x-2 text-green-600 text-sm">
           <CheckCircle className="w-4 h-4" />
-          <span>
-            Сохранено в {lastSaved.toLocaleTimeString('ru-RU')}
-          </span>
+          <span>Сохранено в {lastSaved.toLocaleTimeString('ru-RU')}</span>
         </div>
       )}
 
@@ -250,9 +297,141 @@ function BotTab() {
 }
 
 // ============================================
-// КОМПОНЕНТ TOGGLE
+// INTEGRATIONS TAB
 // ============================================
+function IntegrationsTab() {
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-xl font-bold text-gray-900 mb-4">Интеграции</h2>
+        <p className="text-gray-600">Подключение внешних сервисов</p>
+      </div>
 
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+        <p className="text-sm text-blue-800">
+          ℹ️ Функционал интеграций находится в разработке
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ============================================
+// NOTIFICATIONS TAB
+// ============================================
+function NotificationsTab() {
+  const [notifications, setNotifications] = useState({
+    email_on_error: true,
+    email_on_success: false,
+    daily_report: true,
+  });
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-xl font-bold text-gray-900 mb-4">Уведомления</h2>
+        <p className="text-gray-600">Настройка email и push уведомлений</p>
+      </div>
+
+      <div className="space-y-3">
+        <label className="flex items-center space-x-3">
+          <input
+            type="checkbox"
+            checked={notifications.email_on_error}
+            onChange={(e) =>
+              setNotifications({
+                ...notifications,
+                email_on_error: e.target.checked,
+              })
+            }
+            className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+          />
+          <span className="text-sm text-gray-700">
+            Отправлять email при ошибках
+          </span>
+        </label>
+
+        <label className="flex items-center space-x-3">
+          <input
+            type="checkbox"
+            checked={notifications.email_on_success}
+            onChange={(e) =>
+              setNotifications({
+                ...notifications,
+                email_on_success: e.target.checked,
+              })
+            }
+            className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+          />
+          <span className="text-sm text-gray-700">
+            Отправлять email при успешной отправке
+          </span>
+        </label>
+
+        <label className="flex items-center space-x-3">
+          <input
+            type="checkbox"
+            checked={notifications.daily_report}
+            onChange={(e) =>
+              setNotifications({
+                ...notifications,
+                daily_report: e.target.checked,
+              })
+            }
+            className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+          />
+          <span className="text-sm text-gray-700">
+            Ежедневный отчёт о работе системы
+          </span>
+        </label>
+      </div>
+    </div>
+  );
+}
+
+// ============================================
+// SECURITY TAB
+// ============================================
+function SecurityTab() {
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-xl font-bold text-gray-900 mb-4">Безопасность</h2>
+        <p className="text-gray-600">Настройки безопасности аккаунта</p>
+      </div>
+
+      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+        <p className="text-sm text-yellow-800">
+          ⚠️ Функционал безопасности находится в разработке
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ============================================
+// ADVANCED TAB
+// ============================================
+function AdvancedTab() {
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-xl font-bold text-gray-900 mb-4">Дополнительно</h2>
+        <p className="text-gray-600">Расширенные настройки системы</p>
+      </div>
+
+      <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+        <p className="text-sm text-gray-600">
+          ℹ️ Дополнительные настройки находятся в разработке
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ============================================
+// TOGGLE COMPONENT
+// ============================================
 function Toggle({
   checked,
   onChange,
@@ -277,6 +456,3 @@ function Toggle({
     </button>
   );
 }
-
-// Остальные табы (ProfileTab, IntegrationsTab, etc.) остаются без изменений...
-// (Код из предыдущей версии)

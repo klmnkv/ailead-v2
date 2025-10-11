@@ -1,110 +1,100 @@
-// api/src/models/Integration.ts
 import { DataTypes, Model, Optional } from 'sequelize';
 import { sequelize } from '../config/database.js';
 
 interface IntegrationAttributes {
-    id: number;
-    account_id: number;
-    amocrm_account_id: number;
-    base_url: string;
-    domain?: string;
-    client_id?: string;
-    access_token: string;
-    refresh_token: string;
-    token_expiry: number;
-    status: 'active' | 'expired' | 'revoked';
-    last_sync_at: Date | null;
-    created_at: Date;
-    updated_at: Date;
+  id: number;
+  account_id: number;
+  amocrm_account_id: number;
+  domain: string;
+  base_url: string;
+  access_token: string;
+  refresh_token: string;
+  token_expiry: number;
+  email?: string;
+  password?: string;
+  status: string;
+  created_at?: Date;
+  updated_at?: Date;
 }
 
 interface IntegrationCreationAttributes
-    extends Optional<IntegrationAttributes, 'id' | 'domain' | 'client_id' | 'last_sync_at' | 'created_at' | 'updated_at'> {}
+  extends Optional<IntegrationAttributes, 'id' | 'created_at' | 'updated_at'> {}
 
-export class Integration extends Model<IntegrationAttributes, IntegrationCreationAttributes>
-    implements IntegrationAttributes {
-    declare id: number;
-    declare account_id: number;
-    declare amocrm_account_id: number;
-    declare base_url: string;
-    declare domain?: string;
-    declare client_id?: string;
-    declare access_token: string;
-    declare refresh_token: string;
-    declare token_expiry: number;
-    declare status: 'active' | 'expired' | 'revoked';
-    declare last_sync_at: Date | null;
-
-    declare readonly created_at: Date;
-    declare readonly updated_at: Date;
+export class Integration extends Model<
+  IntegrationAttributes,
+  IntegrationCreationAttributes
+> {
+  toJSON() {
+    const values = super.toJSON();
+    delete values.access_token;
+    delete values.refresh_token;
+    delete values.password;
+    return values;
+  }
 }
 
 Integration.init(
-    {
-        id: {
-            type: DataTypes.INTEGER,
-            autoIncrement: true,
-            primaryKey: true
-        },
-        account_id: {
-            type: DataTypes.INTEGER,
-            allowNull: false,
-            references: {
-                model: 'accounts',
-                key: 'id'
-            }
-        },
-        amocrm_account_id: {
-            type: DataTypes.INTEGER,
-            allowNull: false
-        },
-        base_url: {
-            type: DataTypes.STRING(255),
-            allowNull: false
-        },
-        domain: {
-            type: DataTypes.STRING(255),
-            allowNull: true,
-            defaultValue: null
-        },
-        client_id: {
-            type: DataTypes.STRING(255),
-            allowNull: true,
-            defaultValue: null
-        },
-        access_token: {
-            type: DataTypes.TEXT,
-            allowNull: false
-        },
-        refresh_token: {
-            type: DataTypes.TEXT,
-            allowNull: false
-        },
-        token_expiry: {
-            type: DataTypes.INTEGER,
-            allowNull: false
-        },
-        status: {
-            type: DataTypes.STRING(50),
-            defaultValue: 'active'
-        },
-        last_sync_at: {
-            type: DataTypes.DATE,
-            allowNull: true
-        },
-        created_at: {
-            type: DataTypes.DATE,
-            defaultValue: DataTypes.NOW
-        },
-        updated_at: {
-            type: DataTypes.DATE,
-            defaultValue: DataTypes.NOW
-        }
+  {
+    id: {
+      type: DataTypes.INTEGER,
+      autoIncrement: true,
+      primaryKey: true
     },
-    {
-        sequelize,
-        tableName: 'integrations',
-        timestamps: true,
-        underscored: true
+    account_id: {
+      type: DataTypes.INTEGER,
+      allowNull: false
+    },
+    amocrm_account_id: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      unique: true
+    },
+    domain: {
+      type: DataTypes.STRING(255),
+      allowNull: true
+    },
+    base_url: {
+      type: DataTypes.STRING(500),
+      allowNull: false
+    },
+    access_token: {
+      type: DataTypes.TEXT,
+      allowNull: false
+    },
+    refresh_token: {
+      type: DataTypes.TEXT,
+      allowNull: false
+    },
+    token_expiry: {
+      type: DataTypes.BIGINT,
+      allowNull: false
+    },
+    email: {
+      type: DataTypes.STRING(255),
+      allowNull: true
+    },
+    password: {
+      type: DataTypes.STRING(255),
+      allowNull: true
+    },
+    status: {
+      type: DataTypes.STRING(50),
+      defaultValue: 'active',
+      allowNull: false
+    },
+    created_at: {
+      type: DataTypes.DATE,
+      defaultValue: DataTypes.NOW
+    },
+    updated_at: {
+      type: DataTypes.DATE,
+      defaultValue: DataTypes.NOW
     }
+  },
+  {
+    sequelize,
+    tableName: 'integrations',
+    timestamps: true,
+    underscored: true
+  }
 );

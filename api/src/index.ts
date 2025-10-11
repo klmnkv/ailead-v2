@@ -15,16 +15,6 @@ async function start() {
     await sequelize.authenticate();
     logger.info('✅ Database connected');
 
-    // Загружаем модели
-    logger.info('📦 Loading models...');
-
-    // Синхронизация моделей (только для dev)
-    if (process.env.NODE_ENV === 'development') {
-      logger.info('🔄 Syncing database models...');
-      await sequelize.sync({ alter: true });
-      logger.info('✅ Database models synced');
-    }
-
     // Подключение к Redis
     await connectRedis();
     logger.info('✅ Redis connected');

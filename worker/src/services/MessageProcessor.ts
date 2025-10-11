@@ -29,7 +29,13 @@ export class MessageProcessor {
       const page = await browserPool.getPage(account_id, lead_id);
       await job.progress(20);
 
-      const client = new AmoCRMClient(page, base_url, job.data.access_token);
+      // Передаем все credentials в AmoCRMClient
+      const client = new AmoCRMClient(page, base_url, {
+        base_url,
+        access_token: job.data.access_token,
+        refresh_token: job.data.refresh_token,
+        expiry: job.data.expiry
+      });
 
       await client.openLead(lead_id);
       await job.progress(40);
@@ -90,7 +96,12 @@ export class MessageProcessor {
       let screenshotUrl = null;
       try {
         const page = await browserPool.getPage(account_id, lead_id);
-        const client = new AmoCRMClient(page, base_url, job.data.access_token);
+        const client = new AmoCRMClient(page, base_url, {
+          base_url,
+          access_token: job.data.access_token,
+          refresh_token: job.data.refresh_token,
+          expiry: job.data.expiry
+        });
         screenshotUrl = await client.takeScreenshot(
           `error_${account_id}_${lead_id}_${Date.now()}.png`
         );
