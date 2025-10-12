@@ -1,190 +1,153 @@
-import { Job } from 'bull';
-import { messageQueue } from '../config/queue.js';
+// api/src/services/queue.service.ts
+// Исправленная версия с правильным типом задачи
+
+import Bull from 'bull';
 import { logger } from '../utils/logger.js';
 
-export interface MessageTaskData {
-  account_id: number;
-  lead_id: number;
-  base_url: string;
-  access_token: string;
-  refresh_token: string;
-  message_text: string;
-  note_text?: string;
-  task_text?: string;
-  expiry: number;
-}
+const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
 
-interface AddTaskOptions {
-  priority?: number;
-  delay?: number;
-  attempts?: number;
-}
+// Parse Redis URL для Redis Cloud
+const parseRedisUrl = (url: string) => {
+  try {
+    const redisURL = new URL(url);
+    return {
+      host: redisURL.hostname,
+      port: parseInt(redisURL.port),
+      password: redisURL.password || undefined,
+      username: redisURL.username !== 'default' ? redisURL.username : undefined
+    };
+  } catch (error) {
+    logger.error('Invalid REDIS_URL format:', error);
+    throw error;
+  }
+};
+
+const redisConfig = parseRedisUrl(redisUrl);
+
+// Создаем очередь с тем же именем что и в worker
+const messageQueue = new Bull('messages', {
+  redis: redisConfig,
+  defaultJobOptions: {
+    removeOnComplete: 100,
+    removeOnFail: 50,
+    attempts: 3,
+    backoff: {
+      type: 'exponential',
+      delay: 2000
+    }
+  }
+});
 
 class QueueService {
   /**
-   * Добавляет задачу отправки сообщения в очередь
+   * Добавить задачу на отправку сообщения
+   * ВАЖНО: Используем тип 'send-message' как в worker!
    */
-  async addMessageTask(
-    data: MessageTaskData,
-    options: AddTaskOptions = {}
-  ): Promise<Job<MessageTaskData>> {
-    const { priority = 5, delay = 0, attempts = 3 } = options;
+  async addMessageTask(data: any, options?: any) {
+    try {
+      logger.info('Adding message task to queue', {
+        account_id: data.account_id,
+        lead_id: data.lead_id,
+        has_token: !!data.access_token
+      });
 
-    const job = await messageQueue.add(data, {
-      priority,
-      delay,
-      attempts,
-      backoff: {
-        type: 'exponential',
-        delay: 2000
-      }
-    });
-
-    logger.info(`Job created: ${job.id}`, {
-      account_id: data.account_id,
-      lead_id: data.lead_id,
-      priority
-    });
-
-    return job;
-  }
-
-  /**
-   * Получает задачу по ID
-   */
-  async getJob(jobId: string): Promise<Job<MessageTaskData> | null> {
-    return await messageQueue.getJob(jobId);
-  }
-
-  /**
-   * Получает статистику очередей
-   */
-  async getStats() {
-    const [waiting, active, completed, failed, delayed, paused] = await Promise.all([
-      messageQueue.getWaitingCount(),
-      messageQueue.getActiveCount(),
-      messageQueue.getCompletedCount(),
-      messageQueue.getFailedCount(),
-      messageQueue.getDelayedCount(),
-      messageQueue.isPaused()
-    ]);
-
-    // Получаем последние 100 завершённых задач для расчёта метрик
-    const completedJobs = await messageQueue.getCompleted(0, 100);
-
-    let avgTime = 0;
-    if (completedJobs.length > 0) {
-      const totalTime = completedJobs.reduce((sum, job) => {
-        if (job.finishedOn && job.processedOn) {
-          return sum + (job.finishedOn - job.processedOn);
+      // ВАЖНО: Указываем тип задачи 'send-message'!
+      const job = await messageQueue.add('send-message', data, {
+        priority: options?.priority || 5,
+        attempts: options?.attempts || 3,
+        backoff: {
+          type: 'exponential',
+          delay: 2000
         }
-        return sum;
-      }, 0);
-      avgTime = totalTime / completedJobs.length;
+      });
+
+      logger.info(`✅ Job ${job.id} added to queue with type 'send-message'`);
+      return job;
+    } catch (error) {
+      logger.error('Failed to add task to queue:', error);
+      throw error;
     }
+  }
 
-    const successRate = (completed + failed) > 0
-      ? (completed / (completed + failed)) * 100
-      : 0;
-
-    // Считаем jobs per minute на основе последних завершённых задач
-    let jobsPerMinute = 0;
-    if (completedJobs.length > 1) {
-      const firstJob = completedJobs[completedJobs.length - 1];
-      const lastJob = completedJobs[0];
-      if (firstJob.finishedOn && lastJob.finishedOn) {
-        const timeSpanMinutes = (lastJob.finishedOn - firstJob.finishedOn) / 60000;
-        jobsPerMinute = timeSpanMinutes > 0 ? completedJobs.length / timeSpanMinutes : 0;
+  /**
+   * Получить статус задачи
+   */
+  async getJobStatus(jobId: string) {
+    try {
+      const job = await messageQueue.getJob(jobId);
+      if (!job) {
+        return null;
       }
-    }
 
-    return {
-      waiting,
-      active,
-      completed,
-      failed,
-      delayed,
-      paused,
-      performance: {
-        avg_processing_time: Math.round(avgTime),
-        jobs_per_minute: Math.round(jobsPerMinute * 10) / 10,
-        success_rate: Math.round(successRate * 10) / 10
-      }
-    };
-  }
+      const state = await job.getState();
+      const progress = job.progress();
 
-  /**
-   * Получает позицию задачи в очереди
-   */
-  async getJobPosition(jobId: string): Promise<number> {
-    const waitingJobs = await messageQueue.getWaiting();
-    const position = waitingJobs.findIndex(job => job.id?.toString() === jobId);
-    return position >= 0 ? position + 1 : 0;
-  }
-
-  /**
-   * Проверяет rate limit для аккаунта (простая реализация)
-   * TODO: Улучшить с использованием Redis для точного rate limiting
-   */
-  async checkRateLimit(accountId: number): Promise<boolean> {
-    const activeJobs = await messageQueue.getActive();
-    const accountActiveJobs = activeJobs.filter(
-      job => job.data.account_id === accountId
-    );
-
-    // Лимит: максимум 10 активных задач на аккаунт
-    const MAX_CONCURRENT_PER_ACCOUNT = 10;
-    return accountActiveJobs.length < MAX_CONCURRENT_PER_ACCOUNT;
-  }
-
-  /**
-   * Очищает старые задачи
-   */
-  async cleanup() {
-    logger.info('Running queue cleanup...');
-
-    // Удаляем completed задачи старше 24 часов
-    const completedCleaned = await messageQueue.clean(24 * 60 * 60 * 1000, 'completed');
-    logger.info(`Cleaned ${completedCleaned.length} completed jobs`);
-
-    // Удаляем failed задачи старше 7 дней
-    const failedCleaned = await messageQueue.clean(7 * 24 * 60 * 60 * 1000, 'failed');
-    logger.info(`Cleaned ${failedCleaned.length} failed jobs`);
-  }
-
-  /**
-   * Получает список failed задач для отладки
-   */
-  async getFailedJobs(limit: number = 50) {
-    return await messageQueue.getFailed(0, limit);
-  }
-
-  /**
-   * Повторяет неудавшуюся задачу
-   */
-  async retryFailedJob(jobId: string): Promise<void> {
-    const job = await this.getJob(jobId);
-    if (job) {
-      await job.retry();
-      logger.info(`Job ${jobId} queued for retry`);
+      return {
+        id: job.id,
+        status: state,
+        progress,
+        data: job.data,
+        result: job.returnvalue,
+        failedReason: job.failedReason,
+        processedOn: job.processedOn,
+        finishedOn: job.finishedOn
+      };
+    } catch (error) {
+      logger.error('Failed to get job status:', error);
+      throw error;
     }
   }
 
   /**
-   * Приостанавливает очередь
+   * Получить статистику очереди
    */
-  async pauseQueue(): Promise<void> {
-    await messageQueue.pause();
-    logger.warn('Message queue paused');
+  async getQueueStats() {
+    try {
+      const [
+        waiting,
+        active,
+        completed,
+        failed,
+        delayed,
+        paused
+      ] = await Promise.all([
+        messageQueue.getWaitingCount(),
+        messageQueue.getActiveCount(),
+        messageQueue.getCompletedCount(),
+        messageQueue.getFailedCount(),
+        messageQueue.getDelayedCount(),
+        messageQueue.getPausedCount()
+      ]);
+
+      return {
+        waiting,
+        active,
+        completed,
+        failed,
+        delayed,
+        paused,
+        total: waiting + active + completed + failed + delayed + paused
+      };
+    } catch (error) {
+      logger.error('Failed to get queue stats:', error);
+      throw error;
+    }
   }
 
   /**
-   * Возобновляет очередь
+   * Очистить выполненные задачи
    */
-  async resumeQueue(): Promise<void> {
-    await messageQueue.resume();
-    logger.info('Message queue resumed');
+  async cleanCompleted(grace = 3600000) {
+    return messageQueue.clean(grace, 'completed');
+  }
+
+  /**
+   * Очистить failed задачи
+   */
+  async cleanFailed(grace = 3600000) {
+    return messageQueue.clean(grace, 'failed');
   }
 }
 
 export const queueService = new QueueService();
+export { messageQueue };
