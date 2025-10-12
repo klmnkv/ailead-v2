@@ -6,26 +6,44 @@ interface MessageAttributes {
   account_id: number;
   integration_id: number;
   lead_id: number;
-  message_text: string;
-  message_type: 'chat' | 'note' | 'task';
-  direction: 'incoming' | 'outgoing';
-  status: 'pending' | 'sent' | 'failed';
-  processing_time?: number;
-  error_message?: string;
-  screenshot_url?: string;
+  contact_id?: number;
+  message_text?: string;
+  message_type: string;
+  direction: string;
+  status: string;
   job_id?: string;
+  error_message?: string;
   sent_at?: Date;
+  processing_time?: number;
+  metadata?: string;
   created_at?: Date;
   updated_at?: Date;
 }
 
 interface MessageCreationAttributes
-  extends Optional<MessageAttributes, 'id' | 'created_at' | 'updated_at' | 'sent_at' | 'processing_time' | 'error_message' | 'screenshot_url' | 'job_id'> {}
+  extends Optional<MessageAttributes, 'id' | 'created_at' | 'updated_at'> {}
 
 export class Message extends Model<
   MessageAttributes,
   MessageCreationAttributes
-> {}
+> implements MessageAttributes {
+  public id!: number;
+  public account_id!: number;
+  public integration_id!: number;
+  public lead_id!: number;
+  public contact_id?: number;
+  public message_text?: string;
+  public message_type!: string;
+  public direction!: string;
+  public status!: string;
+  public job_id?: string;
+  public error_message?: string;
+  public sent_at?: Date;
+  public processing_time?: number;
+  public metadata?: string;
+  public readonly created_at!: Date;
+  public readonly updated_at!: Date;
+}
 
 Message.init(
   {
@@ -46,43 +64,48 @@ Message.init(
       type: DataTypes.INTEGER,
       allowNull: false
     },
+    contact_id: {
+      type: DataTypes.INTEGER,
+      allowNull: true
+    },
     message_text: {
       type: DataTypes.TEXT,
-      allowNull: false
+      allowNull: true
     },
     message_type: {
-      type: DataTypes.STRING(20),
+      type: DataTypes.STRING(50),
       allowNull: false,
       defaultValue: 'chat'
     },
     direction: {
-      type: DataTypes.STRING(20),
+      type: DataTypes.STRING(50),
       allowNull: false,
       defaultValue: 'outgoing'
     },
     status: {
-      type: DataTypes.STRING(20),
+      type: DataTypes.STRING(50),
       allowNull: false,
       defaultValue: 'pending'
     },
-    processing_time: {
-      type: DataTypes.INTEGER,
-      allowNull: true
+    job_id: {
+      type: DataTypes.STRING(255),
+      allowNull: true,
+      unique: true
     },
     error_message: {
       type: DataTypes.TEXT,
       allowNull: true
     },
-    screenshot_url: {
-      type: DataTypes.STRING(500),
-      allowNull: true
-    },
-    job_id: {
-      type: DataTypes.STRING(100),
-      allowNull: true
-    },
     sent_at: {
       type: DataTypes.DATE,
+      allowNull: true
+    },
+    processing_time: {
+      type: DataTypes.INTEGER,
+      allowNull: true
+    },
+    metadata: {
+      type: DataTypes.TEXT,
       allowNull: true
     },
     created_at: {
