@@ -752,6 +752,62 @@ async openChat(): Promise<void> {
 }
 
   /**
+ * Переключение на вкладку "Чат"
+ */
+private async openChatTab(): Promise<void> {
+  logger.info('Opening chat tab...');
+
+  try {
+    // Ждем появления переключателя
+    await this.page.waitForSelector('.feed-compose-switcher', {
+      visible: true,
+      timeout: 5000
+    });
+
+    // Проверяем, уже ли выбран чат
+    const currentTab = await this.page.$eval(
+      '.feed-compose-switcher',
+      el => el.textContent?.trim()
+    );
+
+    if (currentTab === 'Чат') {
+      logger.info('Chat tab already selected');
+      return;
+    }
+
+    // Кликаем по переключателю
+    await this.page.hover('.feed-compose-switcher');
+    await this.page.waitForTimeout(1000);
+
+    // Ждем появления опции "Чат"
+    const chatOption = await this.page.waitForSelector('[data-id="chat"]', {
+      visible: true,
+      timeout: 3000
+    }).catch(() => null);
+
+    if (!chatOption) {
+      // Пробуем клик по переключателю
+      await this.page.click('.feed-compose-switcher');
+      await this.page.waitForTimeout(1000);
+    }
+
+    // Кликаем по опции "Чат"
+    await this.page.evaluate(() => {
+      const chatEl = document.querySelector('[data-id="chat"]');
+      if (chatEl) {
+        (chatEl as HTMLElement).click();
+      }
+    });
+
+    await this.page.waitForTimeout(500);
+    logger.info('Chat tab opened successfully');
+
+  } catch (error: any) {
+    logger.error('Failed to open chat tab:', error);
+    throw new Error(`Failed to open chat tab: ${error.message}`);
+  }
+}
+  /**
    * Отправка сообщения в чат
    */
   async sendChatMessage(messageText: string): Promise<void> {
@@ -759,7 +815,7 @@ async openChat(): Promise<void> {
 
     try {
       // 1. Открываем чат (теперь он сам дожидается загрузки интерфейса)
-      await this.openChat();
+      await this.openChatTab();
 
       // 2. Даем время интерфейсу стабилизироваться после загрузки
       await this.page.waitForTimeout(3000);
@@ -999,170 +1055,61 @@ private async sendMessage(messageText: string): Promise<void> {
   logger.info('Typing and sending message...');
 
   try {
-    // 🔥 ШАГ 1: КРИТИЧНО - Принудительно устанавливаем ВСЕ правильные классы
-    await this.page.evaluate(() => {
-      const feedCompose = document.querySelector('.feed-compose');
-      const noteContainer = document.querySelector('.js-note');
-      const hiddenInput = document.querySelector('input[name="feed-compose-switcher"]');
-
-      if (feedCompose) {
-        feedCompose.classList.remove('feed-compose_note', 'feed-compose_task', 'feed-compose_email');
-      }
-
-      if (noteContainer) {
-        noteContainer.className = 'js-note feed-note-fixer feed-compose_amojo internal';
-      }
-
-      if (hiddenInput) {
-        (hiddenInput as HTMLInputElement).value = 'chat';
-      }
-    });
-
-    await this.page.waitForTimeout(500);
-
-    // 🔥 ШАГ 2: Диагностика - проверяем что классы установлены
-    const modeCheck = await this.page.evaluate(() => {
-      const noteContainer = document.querySelector('.js-note');
-      const hiddenInput = document.querySelector('input[name="feed-compose-switcher"]');
-
-      return {
-        containerClasses: noteContainer?.className,
-        hiddenInputValue: hiddenInput ? (hiddenInput as HTMLInputElement).value : null,
-        hasAmojo: noteContainer?.classList.contains('feed-compose_amojo'),
-        hasNote: noteContainer?.classList.contains('feed-compose_note'),
-      };
-    });
-
-    logger.info('🔍 Mode after class setup:', modeCheck);
-
-    if (!modeCheck.hasAmojo || modeCheck.hasNote) {
-      logger.error('Failed to set correct chat mode classes!');
-      await this.takeScreenshot(`error_wrong_classes_${Date.now()}.png`);
-      throw new Error('Failed to set chat mode - wrong container classes');
-    }
-
-    // 🔥 ШАГ 3: СТАРЫЙ СПОСОБ - evaluate в чистом JS без современного синтаксиса
-    const sendResult = await this.page.evaluate(function(message) {
-      // Используем старый синтаксис function вместо стрелочной функции
-      var inputSelector = '.control-contenteditable__area.feed-compose__message';
-      var buttonSelector = '.js-note-submit.feed-note__button';
-
-      // Находим поле ввода
-      var inputField = document.querySelector(inputSelector);
+    // Вводим текст через evaluate
+    const errorMessage = await this.page.evaluate((text, inputSel, buttonSel) => {
+      const inputField = document.querySelector(inputSel);
       if (!inputField) {
-        return { success: false, error: 'Input field not found' };
+        return `Input field not found: ${inputSel}`;
       }
 
       // Активируем поле
-      inputField.click();
-      inputField.focus();
+      (inputField as HTMLElement).click();
 
-      // Очищаем поле через selection
-      var range = document.createRange();
+      // Очищаем
+      const range = document.createRange();
       range.selectNodeContents(inputField);
-      var selection = window.getSelection();
-      if (selection) {
-        selection.removeAllRanges();
-        selection.addRange(range);
-      }
+      const selection = window.getSelection();
+      selection?.removeAllRanges();
+      selection?.addRange(range);
       document.execCommand('delete');
 
-      // Небольшая задержка (busy wait)
-      var start = Date.now();
-      while (Date.now() - start < 100) {
-        // ничего не делаем
+      // Вставляем текст
+      document.execCommand('insertText', false, text);
+
+      // Проверяем вставку
+      const normalize = (t: string) => t.replace(/\r?\n/g, '').replace(/\s+/g, ' ').trim();
+      if (normalize(inputField.textContent || '') !== normalize(text)) {
+        return `Text not inserted correctly: "${inputField.textContent}" !== "${text}"`;
       }
 
-      // Вставляем текст через execCommand
-      document.execCommand('insertText', false, message);
-
-      // Триггерим события
-      inputField.dispatchEvent(new Event('input', { bubbles: true }));
-      inputField.dispatchEvent(new Event('change', { bubbles: true }));
-      inputField.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true }));
-
-      // Проверяем что текст вставился
-      var insertedText = inputField.textContent ? inputField.textContent.trim() : '';
-
-      // Функция нормализации (старый синтаксис)
-      function normalize(text) {
-        if (!text) return '';
-        return text.replace(/\r?\n/g, '').replace(/\s+/g, ' ').trim();
-      }
-
-      if (normalize(insertedText) !== normalize(message)) {
-        return {
-          success: false,
-          error: 'Text not inserted correctly',
-          expected: message,
-          actual: insertedText
-        };
-      }
-
-      // Находим кнопку отправки
-      var sendButton = document.querySelector(buttonSelector);
+      // Прокручиваем и кликаем кнопку
+      const sendButton = document.querySelector(buttonSel);
       if (!sendButton) {
-        return { success: false, error: 'Send button not found' };
+        return `Send button not found: ${buttonSel}`;
       }
 
-      // Убираем disabled если есть
-      sendButton.classList.remove('button-input-disabled');
-      sendButton.disabled = false;
+      (sendButton as HTMLElement).scrollIntoView({
+        behavior: 'smooth',
+        block: 'center'
+      });
 
-      // Прокручиваем кнопку в видимую область
-      sendButton.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      (sendButton as HTMLElement).click();
 
-      // Кликаем
-      sendButton.click();
+      return null;
+    }, messageText, SELECTORS.messageInput, SELECTORS.sendButton);
 
-      return {
-        success: true,
-        insertedText: insertedText
-      };
-    }, messageText);
-
-    logger.info('Send result:', sendResult);
-
-    if (!sendResult.success) {
-      logger.error('Failed to send:', sendResult.error);
-      if (sendResult.expected && sendResult.actual) {
-        logger.error('Expected text:', sendResult.expected);
-        logger.error('Actual text:', sendResult.actual);
-      }
-      await this.takeScreenshot(`error_send_failed_${Date.now()}.png`);
-      throw new Error(`Failed to send message: ${sendResult.error}`);
+    if (errorMessage) {
+      logger.error(`Failed to send message: ${errorMessage}`);
+      await this.takeScreenshot(`error_send_message_${Date.now()}.png`);
+      throw new Error(errorMessage);
     }
 
-    logger.info('Message inserted successfully, waiting for send...');
-
-    // Ждем отправки
     await this.page.waitForTimeout(2000);
-
-    // Проверяем что поле очистилось (признак успешной отправки)
-    const cleared = await this.page.$eval(
-      SELECTORS.messageInput,
-      (el: any) => !el.textContent?.trim()
-    ).catch(() => false);
-
-    if (cleared) {
-      logger.info('✅ Message sent successfully');
-    } else {
-      logger.warn('⚠️ Message may not have been sent - input not cleared');
-      await this.takeScreenshot(`warning_not_cleared_${Date.now()}.png`);
-
-      // Дополнительная диагностика
-      const inputContent = await this.page.$eval(
-        SELECTORS.messageInput,
-        (el: any) => el.textContent || ''
-      ).catch(() => '');
-
-      logger.warn('Input content after send:', inputContent);
-    }
+    logger.info('Message sent successfully');
 
   } catch (error: any) {
     logger.error('Failed to send message:', error);
-    await this.takeScreenshot(`error_send_message_${Date.now()}.png`);
-    throw new Error(`Failed to send message: ${error.message}`);
+    throw error;
   }
 }
 
