@@ -1,178 +1,33 @@
+// worker-js/lib/amocrm.mjs
 import { logger } from './logger.mjs';
 
 export class AmoCRMClient {
   constructor(page, credentials) {
     this.page = page;
-    // Нормализуем URL
-    this.baseUrl = credentials.base_url.replace(/^https?:\/\//, '');
+    this.baseUrl = credentials.base_url;
     this.email = credentials.email;
     this.password = credentials.password;
-    this.accessToken = credentials.access_token;
-    this.refreshToken = credentials.refresh_token;
-    this.tokenExpiry = credentials.expiry;
     this.isAuthenticated = false;
-  }
-
-  /**
-   * Главный метод авторизации - пробует все способы
-   */
-  async ensureAuthorized() {
-    logger.info('Checking authorization...');
-
-    // Проверяем текущее состояние
-    if (await this.isAuthorized()) {
-      logger.info('Already authorized');
-      return;
-    }
-
-    logger.warn('Not authorized, trying auth methods...');
-
-    // Метод 1: Куки с токенами
-    logger.info('Method 1: Setting auth cookies...');
-
-    // Проверяем не истекли ли токены
-    const now = Date.now();
-    if (this.tokenExpiry && this.tokenExpiry < now) {
-      logger.warn('⚠️ Tokens expired');
-    }
-
-    await this.setAuthCookies();
-    await this.page.reload({ waitUntil: 'networkidle2', timeout: 30000 });
-    await this.page.waitForTimeout(2000);
-
-    if (await this.isAuthorized()) {
-      logger.info('✅ Authorized via cookies');
-      this.isAuthenticated = true;
-      return;
-    }
-
-    // Метод 2: Авторизация через форму (логин/пароль)
-    if (this.email && this.password) {
-      logger.warn('Method 2: Login via form (email/password)...');
-      const loginSuccess = await this.loginWithCredentials();
-
-      if (loginSuccess && await this.isAuthorized()) {
-        logger.info('✅ Authorized via login form');
-        this.isAuthenticated = true;
-        return;
-      }
-    }
-
-    // Все методы не сработали
-    await this.takeScreenshot('auth-failed-all-methods');
-    logger.error('❌ Authorization failed after all attempts');
-    throw new Error('Authorization failed - all methods exhausted');
-  }
-
-  /**
-   * Проверка авторизации
-   */
-  async isAuthorized() {
-    try {
-      // Проверяем что НЕ на странице логина
-      const authPage = await this.isAuthPage();
-      if (authPage) {
-        logger.warn('On auth page - not authorized');
-        return false;
-      }
-
-      // Проверяем наличие основных элементов amoCRM
-      const hasContent = await this.page.evaluate(() => {
-        const selectors = [
-          '.page-body',
-          '.page-head',
-          '.pipeline-trigger',
-          '.feed-compose-user__name',
-          '.card-contact',
-          '[data-entity="leads"]'
-        ];
-
-        return selectors.some(selector => document.querySelector(selector) !== null);
-      });
-
-      if (!hasContent) {
-        logger.warn('amoCRM content not found - probably not authorized');
-        return false;
-      }
-
-      logger.info('✅ Authorized - content accessible');
-      return true;
-
-    } catch (error) {
-      logger.error('Error checking authorization:', error);
-      return false;
-    }
-  }
-
-  /**
-   * Проверка страницы авторизации
-   */
-  async isAuthPage() {
-    try {
-      const authElement = await this.page.$('#authentication');
-      return authElement !== null;
-    } catch (error) {
-      return false;
-    }
-  }
-
-  /**
-   * Установка куков с токенами
-   */
-  async setAuthCookies() {
-    try {
-      const domain = this.baseUrl.replace(/^https?:\/\//, '');
-
-      // Очищаем старые куки
-      const cookies = await this.page.cookies();
-      for (const cookie of cookies) {
-        await this.page.deleteCookie(cookie);
-      }
-
-      // Устанавливаем новые куки
-      await this.page.setCookie(
-        {
-          name: 'access_token',
-          value: this.accessToken,
-          domain: `.${domain}`,
-          path: '/',
-          secure: true,
-          httpOnly: false,
-          sameSite: 'Lax'
-        },
-        {
-          name: 'refresh_token',
-          value: this.refreshToken,
-          domain: `.${domain}`,
-          path: '/',
-          secure: true,
-          httpOnly: false,
-          sameSite: 'Lax'
-        }
-      );
-
-      logger.info(`Auth cookies set for domain: ${domain}`);
-    } catch (error) {
-      logger.error('Error setting cookies:', error);
-    }
   }
 
   /**
    * Авторизация через форму логина
    */
-  async loginWithCredentials() {
-    if (!this.email || !this.password) {
-      logger.warn('Email/password not provided - cannot login via form');
-      return false;
+  async login() {
+    if (this.isAuthenticated) {
+      logger.info('Already authenticated');
+      return;
     }
 
-    logger.info('Attempting login via form...', {
-      email: this.email.substring(0, 3) + '***'
+    logger.info('Starting login process...', {
+      email: this.email?.substring(0, 3) + '***'
     });
 
     try {
-      // Переходим на страницу логина
-      const loginUrl = `https://${this.baseUrl}/oauth`;
+      const domain = new URL(this.baseUrl).hostname;
+      const loginUrl = `https://${domain}/leads`;
+
+      logger.info(`Navigating to: ${loginUrl}`);
       await this.page.goto(loginUrl, {
         waitUntil: 'networkidle2',
         timeout: 30000
@@ -180,79 +35,192 @@ export class AmoCRMClient {
 
       await this.page.waitForTimeout(2000);
 
-      // Ждем форму авторизации (несколько вариантов селекторов)
-      const emailInput = await this.page.waitForSelector(
-        'input[name="username"], input[type="email"], input[name="login"]',
-        { timeout: 10000 }
-      ).catch(() => null);
+      const hasAuthForm = await this.page.$('#authentication');
 
-      if (!emailInput) {
-        logger.error('Login form not found');
-        await this.takeScreenshot('login-no-form');
-        return false;
+      if (!hasAuthForm) {
+        logger.info('Already logged in (no auth form found)');
+        this.isAuthenticated = true;
+        return;
       }
 
-      // Вводим email
-      await emailInput.click();
-      await emailInput.type(this.email, { delay: 100 });
+      logger.info('Auth form detected, filling credentials...');
+
+      const emailSelector = 'input[name="username"], input[type="email"], input[name="login"]';
+      const passwordSelector = 'input[name="password"], input[type="password"]';
+
+      await this.page.waitForSelector(emailSelector, {
+        visible: true,
+        timeout: 10000
+      });
+
+      logger.info('Clearing and filling email field...');
+
+      await this.page.evaluate((selector, email) => {
+        const input = document.querySelector(selector);
+        if (input) {
+          input.value = '';
+          input.defaultValue = '';
+          input.setAttribute('autocomplete', 'off');
+          input.focus();
+          input.select();
+          document.execCommand('delete');
+          input.value = email;
+          input.dispatchEvent(new Event('input', { bubbles: true }));
+          input.dispatchEvent(new Event('change', { bubbles: true }));
+          input.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true }));
+        }
+      }, emailSelector, this.email);
+
       await this.page.waitForTimeout(500);
 
-      // Ищем кнопку "Далее" или сразу поле пароля
-      const nextButton = await this.page.$('button[type="submit"]');
-      if (nextButton) {
-        const buttonText = await this.page.evaluate(el => el.textContent, nextButton);
-        logger.info(`Found submit button: "${buttonText}"`);
+      const emailValue = await this.page.$eval(emailSelector, el => el.value);
+      logger.info('Email field value:', emailValue);
 
-        // Если кнопка говорит "Далее" или "Next" - кликаем
-        if (buttonText && (buttonText.includes('Далее') || buttonText.includes('Next') || buttonText.includes('Продолжить'))) {
-          await nextButton.click();
+      if (emailValue !== this.email) {
+        logger.warn('Email value mismatch! Trying alternative method...');
+        await this.page.click(emailSelector, { clickCount: 3 });
+        await this.page.keyboard.press('Backspace');
+        await this.page.waitForTimeout(200);
+        await this.page.keyboard.type(this.email, { delay: 50 });
+        await this.page.waitForTimeout(500);
+      }
+
+      const submitButton = await this.page.$('button[type="submit"]');
+      const passwordExists = await this.page.$(passwordSelector);
+
+      if (submitButton && !passwordExists) {
+        const buttonText = await this.page.evaluate(btn => btn.innerText, submitButton);
+        logger.info('Submit button found:', buttonText);
+
+        if (buttonText.includes('Далее') || buttonText.includes('Продолжить') || buttonText.includes('Next')) {
+          logger.info('Clicking "Next" button...');
+          await submitButton.click();
           await this.page.waitForTimeout(2000);
         }
       }
 
-      // Вводим пароль
-      const passwordInput = await this.page.waitForSelector(
-        'input[name="password"], input[type="password"]',
-        { timeout: 10000 }
-      ).catch(() => null);
+      await this.page.waitForSelector(passwordSelector, {
+        visible: true,
+        timeout: 10000
+      });
 
-      if (!passwordInput) {
-        logger.error('Password field not found');
-        await this.takeScreenshot('login-no-password-field');
-        return false;
-      }
+      logger.info('Clearing and filling password field...');
 
-      await passwordInput.click();
-      await passwordInput.type(this.password, { delay: 100 });
+      await this.page.evaluate((selector, password) => {
+        const input = document.querySelector(selector);
+        if (input) {
+          input.value = '';
+          input.defaultValue = '';
+          input.setAttribute('autocomplete', 'off');
+          input.focus();
+          input.select();
+          document.execCommand('delete');
+          input.value = password;
+          input.dispatchEvent(new Event('input', { bubbles: true }));
+          input.dispatchEvent(new Event('change', { bubbles: true }));
+          input.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true }));
+        }
+      }, passwordSelector, this.password);
+
       await this.page.waitForTimeout(500);
 
-      logger.info('Credentials entered, submitting form...');
+      const passwordLength = await this.page.$eval(passwordSelector, el => el.value.length);
+      logger.info('Password field length:', passwordLength);
 
-      // Нажимаем "Войти"
-      const submitButton = await this.page.$('button[type="submit"]');
-      if (submitButton) {
-        await submitButton.click();
-      } else {
-        await passwordInput.press('Enter');
+      if (passwordLength !== this.password.length) {
+        logger.warn('Password length mismatch! Expected:', this.password.length, 'Got:', passwordLength);
       }
 
-      // Ждем завершения авторизации
-      await this.page.waitForNavigation({
-        waitUntil: 'networkidle2',
-        timeout: 15000
-      }).catch(() => {
-        logger.warn('Navigation timeout - checking if logged in anyway');
+      const hasCaptcha = await this.page.evaluate(() => {
+        return !!(
+          document.querySelector('.g-recaptcha') ||
+          document.querySelector('[data-sitekey]') ||
+          document.querySelector('iframe[src*="recaptcha"]') ||
+          document.querySelector('iframe[src*="captcha"]') ||
+          document.querySelector('.captcha')
+        );
+      });
+
+      if (hasCaptcha) {
+        logger.warn('⚠️ Captcha detected! Waiting 30 seconds for manual solving...');
+        await this.takeScreenshot(`captcha_detected_${Date.now()}`);
+        await this.page.waitForTimeout(30000);
+      }
+
+      const loginButton = await this.page.$('button[type="submit"]');
+      if (loginButton) {
+        logger.info('Clicking login button...');
+        await loginButton.click();
+      } else {
+        logger.info('Login button not found, pressing Enter...');
+        await this.page.keyboard.press('Enter');
+      }
+
+      logger.info('Waiting for navigation after login...');
+
+      await Promise.race([
+        this.page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 45000 }),
+        this.page.waitForFunction(() => !document.querySelector('#authentication'), { timeout: 45000 }),
+        this.page.waitForFunction(() => {
+          return !!(
+            document.querySelector('.top-menu') ||
+            document.querySelector('.nav-menu') ||
+            document.querySelector('.feed-compose') ||
+            document.querySelector('.pipeline-selector')
+          );
+        }, { timeout: 45000 })
+      ]).catch((error) => {
+        logger.warn('Wait timeout after login:', error.message);
       });
 
       await this.page.waitForTimeout(3000);
 
-      logger.info('✅ Login form submitted');
-      return true;
+      const stillHasAuthForm = await this.page.$('#authentication');
+
+      if (!stillHasAuthForm) {
+        logger.info('✅ Login successful - auth form disappeared');
+        this.isAuthenticated = true;
+      } else {
+        logger.error('Login failed - auth form still present');
+        await this.takeScreenshot('login-failed');
+        throw new Error('Login failed - auth form still visible');
+      }
 
     } catch (error) {
-      logger.error('Error during form login:', error);
+      logger.error('Login error:', error);
       await this.takeScreenshot('login-error');
-      return false;
+      throw error;
+    }
+  }
+
+  /**
+   * Проверка авторизации
+   */
+  async ensureAuthorized() {
+    // ✅ ДОБАВЛЕНО: Проверяем что страница не закрыта
+    if (this.page.isClosed()) {
+      logger.error('Page is closed!');
+      throw new Error('Page is closed');
+    }
+
+    const isAuthPage = await this.page.$('#authentication').catch(() => null);
+
+    if (isAuthPage) {
+      logger.info('Auth required, logging in...');
+      await this.login();
+
+      const stillAuthPage = await this.page.$('#authentication').catch(() => null);
+      if (stillAuthPage) {
+        logger.warn('Still on auth page after login, reloading...');
+        await this.page.reload({ waitUntil: 'domcontentloaded' });
+        await this.page.waitForTimeout(2000);
+      }
+
+      if (await this.page.$('#authentication').catch(() => null)) {
+        logger.error('Authorization failed after all attempts');
+        await this.takeScreenshot('auth-failed');
+        throw new Error('Authorization failed');
+      }
     }
   }
 
@@ -260,39 +228,220 @@ export class AmoCRMClient {
    * Открывает сделку по ID
    */
   async openLead(leadId) {
-    const leadUrl = `https://${this.baseUrl}/leads/detail/${leadId}`;
+    const leadUrl = `${this.baseUrl}/leads/detail/${leadId}`;
+
     logger.info(`Opening lead: ${leadUrl}...`);
 
     try {
-      await this.page.goto(leadUrl, {
-        waitUntil: 'networkidle2',
-        timeout: 30000
-      });
+      // ✅ ДОБАВЛЕНО: Проверяем что страница не закрыта
+      if (this.page.isClosed()) {
+        throw new Error('Page is closed before opening lead');
+      }
 
-      // ✅ Сразу проверяем авторизацию
+      const currentUrl = this.page.url();
+
+      if (currentUrl.includes(`/leads/detail/${leadId}`)) {
+        logger.info(`Already on lead ${leadId} page, verifying...`);
+
+        const pageLoaded = await this.page.evaluate(() => {
+          return !!(
+            document.querySelector('.card-header') ||
+            document.querySelector('.feed-compose') ||
+            document.querySelector('.pipeline-leads__card')
+          );
+        });
+
+        if (pageLoaded) {
+          logger.info(`Lead ${leadId} page verified`);
+        } else {
+          logger.warn(`Lead page elements not found, reloading...`);
+          await this.page.reload({ waitUntil: 'networkidle2', timeout: 30000 });
+          await this.page.waitForTimeout(2000);
+        }
+      } else {
+        logger.info(`Navigating to lead ${leadId}...`);
+        await this.page.goto(leadUrl, {
+          waitUntil: 'networkidle2',
+          timeout: 30000
+        });
+        await this.page.waitForTimeout(2000);
+      }
+
+      // Проверяем авторизацию
       await this.ensureAuthorized();
+
+      // ✅ ИСПРАВЛЕНО: После логина могли попасть на воронку - проверяем и переходим заново
+      const finalUrl = this.page.url();
+      if (!finalUrl.includes(`/leads/detail/${leadId}`)) {
+        logger.warn(`Not on lead page after auth. Current: ${finalUrl}. Navigating again...`);
+        await this.page.goto(leadUrl, {
+          waitUntil: 'networkidle2',
+          timeout: 30000
+        });
+        await this.page.waitForTimeout(3000);
+      }
+
+      // Ждём ключевые элементы страницы сделки
+      logger.info('Waiting for lead page elements...');
+
+      const leadPageLoaded = await Promise.race([
+        this.page.waitForSelector('.card-header', { timeout: 15000 }).then(() => true),
+        this.page.waitForSelector('.feed-compose', { timeout: 15000 }).then(() => true),
+        this.page.waitForSelector('.pipeline-leads__card', { timeout: 15000 }).then(() => true),
+        new Promise(resolve => setTimeout(() => resolve(false), 15000))
+      ]);
+
+      if (!leadPageLoaded) {
+        logger.warn('Lead page elements not found after timeout');
+        await this.takeScreenshot(`lead-page-not-loaded-${leadId}`);
+
+        const verifyUrl = this.page.url();
+        if (!verifyUrl.includes(`/leads/detail/${leadId}`)) {
+          throw new Error(`Not on lead page. Current URL: ${verifyUrl}`);
+        }
+
+        logger.warn('URL is correct but elements not found - continuing anyway');
+      }
+
       await this.page.waitForTimeout(3000);
 
       logger.info(`✅ Lead ${leadId} opened successfully`);
 
     } catch (error) {
       logger.error(`Failed to open lead ${leadId}:`, error);
-      await this.takeScreenshot('open-lead-error');
+
+      // ✅ ДОБАВЛЕНО: Безопасная диагностика
+      try {
+        const diagnostics = await this.page.evaluate(() => {
+          return {
+            url: window.location.href,
+            title: document.title,
+            hasCardHeader: !!document.querySelector('.card-header'),
+            hasFeedCompose: !!document.querySelector('.feed-compose'),
+            hasPipelineCard: !!document.querySelector('.pipeline-leads__card'),
+            hasAuthForm: !!document.querySelector('#authentication')
+          };
+        });
+        logger.error('Lead page diagnostics:', diagnostics);
+      } catch (diagError) {
+        logger.error('Could not get diagnostics:', diagError.message);
+      }
+
+      await this.takeScreenshot(`error-open-lead-${leadId}`).catch(() => {});
       throw error;
     }
   }
 
-  /**
-   * Отправляет сообщение в чат сделки
-   */
+  // ... остальные методы без изменений (openChat, sendChatMessage и т.д. - оставляем как были)
+
+  async openChat() {
+    logger.info('Opening chat...');
+
+    try {
+      await this.page.waitForSelector('.feed-compose', { timeout: 10000 });
+      await this.expandChatIfMinimized();
+      await this.page.waitForSelector('.feed-compose-switcher', { visible: true, timeout: 5000 });
+
+      const currentText = await this.page.$eval('.feed-compose-switcher', el => el.innerText?.trim() || '').catch(() => '');
+      logger.info(`Current tab: "${currentText}"`);
+
+      if (currentText === 'Чат') {
+        logger.info('Chat tab already selected, verifying...');
+        const hasCorrectClasses = await this.page.evaluate(() => {
+          const noteContainer = document.querySelector('.js-note');
+          return noteContainer?.classList.contains('feed-compose_amojo') &&
+                 !noteContainer?.classList.contains('feed-compose_note');
+        });
+
+        if (hasCorrectClasses) {
+          logger.info('Chat interface already loaded with correct classes');
+          return;
+        }
+        logger.warn('Chat selected but wrong classes, fixing...');
+      }
+
+      logger.info('Switching to chat...');
+
+      const switchResult = await this.page.evaluate(() => {
+        const hiddenInput = document.querySelector('input[name="feed-compose-switcher"]');
+        if (hiddenInput) {
+          hiddenInput.value = 'chat';
+          hiddenInput.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+
+        const chatSwitcher = document.querySelector('.js-switcher-chat');
+        if (!chatSwitcher) {
+          return { success: false, error: 'Chat switcher not found' };
+        }
+
+        chatSwitcher.click();
+        return { success: true };
+      });
+
+      if (!switchResult.success) {
+        throw new Error(switchResult.error || 'Failed to switch to chat');
+      }
+
+      await this.page.waitForTimeout(2000);
+
+      const messageInput = await this.page.$('.control-contenteditable__area.feed-compose__message');
+      if (!messageInput) {
+        logger.error('Chat interface did not load');
+        await this.takeScreenshot('error-chat-interface');
+        throw new Error('Chat interface did not load');
+      }
+
+      await this.page.evaluate(() => {
+        const feedCompose = document.querySelector('.feed-compose');
+        const noteContainer = document.querySelector('.js-note');
+
+        if (feedCompose) {
+          feedCompose.classList.remove('feed-compose_note', 'feed-compose_task');
+        }
+
+        if (noteContainer) {
+          noteContainer.className = 'js-note feed-note-fixer feed-compose_amojo internal';
+        }
+      });
+
+      await this.page.waitForTimeout(500);
+
+      logger.info('✅ Chat opened successfully');
+
+    } catch (error) {
+      logger.error('Failed to open chat:', error);
+      await this.takeScreenshot('error-open-chat');
+      throw error;
+    }
+  }
+
+  async expandChatIfMinimized() {
+    const isMinimized = await this.page.evaluate(() => {
+      const feedCompose = document.querySelector('.feed-compose');
+      return feedCompose?.classList.contains('minimized');
+    });
+
+    if (isMinimized) {
+      logger.info('Chat is minimized, expanding...');
+
+      await this.page.evaluate(() => {
+        const expandButton = document.querySelector('.feed-compose__minimized-title');
+        if (expandButton) {
+          expandButton.click();
+        }
+      });
+
+      await this.page.waitForTimeout(1000);
+      logger.info('Chat expanded');
+    }
+  }
+
   async sendChatMessage(messageText) {
     logger.info('Sending chat message...');
 
     try {
-      // Выбираем получателя
+      await this.openChat();
       await this.selectRecipient();
-
-      // Отправляем сообщение
       await this.sendMessage(messageText);
 
       logger.info('✅ Chat message sent successfully');
@@ -304,9 +453,6 @@ export class AmoCRMClient {
     }
   }
 
-  /**
-   * Выбор получателя сообщения
-   */
   async selectRecipient() {
     logger.info('Selecting recipient...');
 
@@ -341,80 +487,119 @@ export class AmoCRMClient {
     await this.page.waitForTimeout(1000);
   }
 
-  /**
-   * Ввод и отправка сообщения
-   */
-  async sendMessage(messageText) {
-    logger.info('Typing and sending message...');
+  async sendMessage(text) {
+    logger.info('Typing message...');
 
-    const messageInputSelector = '.feed-compose__message';
-    const sendButtonSelector = '.feed-note__button';
+    const messageInput = '.control-contenteditable__area.feed-compose__message';
+    const sendButton = '.js-note-submit.feed-note__button';
 
-    const messageInput = await this.page.waitForSelector(messageInputSelector, {
-      timeout: 10000
-    }).catch(() => null);
-
-    if (!messageInput) {
-      await this.takeScreenshot('no-message-input');
-      throw new Error('Message input not found');
-    }
-
-    // Вводим текст
-    await messageInput.click();
-    await this.page.waitForTimeout(500);
-    await messageInput.type(messageText, { delay: 50 });
-    await this.page.waitForTimeout(500);
-
-    logger.info('Message typed, clicking send button...');
-
-    // Нажимаем кнопку отправки
-    const sendButton = await this.page.waitForSelector(sendButtonSelector, {
-      timeout: 10000
-    }).catch(() => null);
-
-    if (sendButton) {
-      await sendButton.click();
-    } else {
-      // Альтернатива: Enter
-      await messageInput.press('Enter');
-    }
-
-    await this.page.waitForTimeout(2000);
-    logger.info('✅ Message sent');
-  }
-
-  /**
-   * Добавляет примечание к сделке
-   */
-  async addNote(noteText) {
-    logger.info('Adding note...');
-    logger.warn('Note adding not implemented yet');
-  }
-
-  /**
-   * Создает задачу в сделке
-   */
-  async createTask(taskText) {
-    logger.info('Creating task...');
-    logger.warn('Task creation not implemented yet');
-  }
-
-  /**
-   * Делает скриншот страницы для отладки
-   */
-  async takeScreenshot(name) {
     try {
-      const fs = await import('fs');
-      if (!fs.existsSync('logs/screenshots')) {
-        fs.mkdirSync('logs/screenshots', { recursive: true });
+      await this.page.evaluate((inputSelector, messageText) => {
+        const input = document.querySelector(inputSelector);
+        if (!input) throw new Error('Message input not found');
+
+        input.focus();
+        input.click();
+
+        const range = document.createRange();
+        range.selectNodeContents(input);
+        const selection = window.getSelection();
+        selection.removeAllRanges();
+        selection.addRange(range);
+        document.execCommand('delete');
+
+        document.execCommand('insertText', false, messageText);
+
+      }, messageInput, text);
+
+      await this.page.waitForTimeout(500);
+
+      const inputValue = await this.page.$eval(messageInput, el => el.textContent?.trim());
+
+      if (inputValue !== text.trim()) {
+        logger.error('Text not inserted correctly');
+        await this.takeScreenshot('error-text-input');
+        throw new Error('Text not inserted correctly');
       }
 
-      const filename = `logs/screenshots/${name}-${Date.now()}.png`;
+      logger.info('Text inserted, sending...');
+
+      await this.page.click(sendButton);
+      await this.page.waitForTimeout(2000);
+
+      logger.info('✅ Message sent');
+
+    } catch (error) {
+      logger.error('Failed to send message:', error);
+      await this.takeScreenshot('error-send-message');
+      throw error;
+    }
+  }
+
+  async addNote(noteText) {
+    logger.info('Adding note...');
+
+    try {
+      await this.switchToNote();
+      await this.sendMessage(noteText);
+
+      logger.info('✅ Note added successfully');
+
+    } catch (error) {
+      logger.error('Failed to add note:', error);
+      await this.takeScreenshot('error-add-note');
+      throw error;
+    }
+  }
+
+  async createTask(taskText) {
+    logger.info('Creating task...');
+
+    try {
+      await this.switchToTask();
+      await this.sendMessage(taskText);
+
+      logger.info('✅ Task created successfully');
+
+    } catch (error) {
+      logger.error('Failed to create task:', error);
+      await this.takeScreenshot('error-create-task');
+      throw error;
+    }
+  }
+
+  async switchToNote() {
+    await this.switchTab('Примечание', '[data-id="note"]');
+  }
+
+  async switchToTask() {
+    await this.switchTab('Задача', '[data-id="task"]');
+  }
+
+  async switchTab(expectedText, targetSelector) {
+    logger.info(`Switching to: ${expectedText}`);
+
+    await this.page.click('.feed-compose-switcher');
+    await this.page.waitForTimeout(500);
+
+    await this.page.waitForSelector(targetSelector, { visible: true, timeout: 3000 });
+    await this.page.click(targetSelector);
+    await this.page.waitForTimeout(1000);
+
+    logger.info(`Switched to: ${expectedText}`);
+  }
+
+  async takeScreenshot(name) {
+    try {
+      if (this.page.isClosed()) {
+        logger.warn('Cannot take screenshot - page is closed');
+        return;
+      }
+
       await this.page.screenshot({
-        path: filename,
-        fullPage: true
+        path: `logs/screenshots/${name}-${Date.now()}.png`,
+        fullPage: false
       });
-      logger.info(`Screenshot saved: ${filename}`);
     } catch (error) {
       logger.error('Failed to take screenshot:', error);
     }
