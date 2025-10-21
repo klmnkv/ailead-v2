@@ -12,6 +12,8 @@ export interface MessageTaskData {
   note_text?: string;
   task_text?: string;
   expiry: number;
+  email?: string;
+  password?: string;
 }
 
 interface AddTaskOptions {

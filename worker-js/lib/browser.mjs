@@ -16,18 +16,75 @@ class BrowserPool {
   async initialize() {
     logger.info('Initializing browser pool...');
 
-    // ✅ ВОЗВРАЩАЕМ как было - без executablePath
+    // Определяем путь к Chrome для Windows
+    const chromePaths = [
+      'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+      'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+      process.env.CHROME_PATH
+    ].filter(Boolean);
+
+    let executablePath;
+
+    // Проверяем наличие Chrome на Windows
+    if (process.platform === 'win32') {
+      const fs = await import('fs');
+      for (const path of chromePaths) {
+        if (fs.existsSync(path)) {
+          executablePath = path;
+          logger.info(`Found Chrome at: ${path}`);
+          break;
+        }
+      }
+    }
+
+    const launchOptions = {
+      headless: false,
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-blink-features=AutomationControlled',
+        '--disable-web-security',
+        '--disable-features=IsolateOrigins,site-per-process'
+      ]
+    };
+
+    // Добавляем executablePath только если нашли Chrome
+    if (executablePath) {
+      launchOptions.executablePath = executablePath;
+    }
+
     for (let i = 0; i < this.maxBrowsers; i++) {
-      const browser = await puppeteer.launch({
-        headless: false,
-        args: [
-          '--no-sandbox',
-          '--disable-setuid-sandbox',
-          '--disable-dev-shm-usage',
-          '--disable-blink-features=AutomationControlled'
-        ]
-      });
-      this.browsers.push(browser);
+      try {
+        const browser = await puppeteer.launch(launchOptions);
+        this.browsers.push(browser);
+      } catch (error) {
+        logger.error(`Failed to launch browser ${i + 1}:`, error.message);
+
+        // Если это первый браузер и не удалось запустить - выбрасываем ошибку
+        if (i === 0) {
+          logger.error('');
+          logger.error('════════════════════════════════════════════════════════════');
+          logger.error('  CHROME NOT FOUND!');
+          logger.error('════════════════════════════════════════════════════════════');
+          logger.error('');
+          logger.error('Please install Chrome or set CHROME_PATH environment variable.');
+          logger.error('');
+          logger.error('Alternative: Install Chromium via Puppeteer:');
+          logger.error('  npm install puppeteer');
+          logger.error('');
+          logger.error('Or set environment variable:');
+          logger.error('  CHROME_PATH="C:\\Path\\To\\Chrome\\chrome.exe"');
+          logger.error('');
+          logger.error('════════════════════════════════════════════════════════════');
+          logger.error('');
+          throw error;
+        }
+      }
+    }
+
+    if (this.browsers.length === 0) {
+      throw new Error('Failed to launch any browsers');
     }
 
     logger.info(`Browser pool initialized with ${this.browsers.length} browsers`);
