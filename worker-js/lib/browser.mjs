@@ -8,18 +8,19 @@ puppeteer.use(StealthPlugin());
 class BrowserPool {
   constructor() {
     this.browsers = [];
-    this.pages = new Map(); // key: "accountId:leadId", value: {page, lastUsed, inUse}
+    this.pages = new Map();
     this.maxBrowsers = 3;
-    this.pageTimeout = 5 * 60 * 1000; // 5 минут неактивности
+    this.pageTimeout = 5 * 60 * 1000;
   }
 
   async initialize() {
     logger.info('Initializing browser pool...');
 
-    // ✅ ВОЗВРАЩАЕМ как было - без executablePath
     for (let i = 0; i < this.maxBrowsers; i++) {
       const browser = await puppeteer.launch({
         headless: false,
+        // ✅ ДОБАВЬТЕ путь к вашему Chrome
+        executablePath: 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
         args: [
           '--no-sandbox',
           '--disable-setuid-sandbox',
@@ -36,15 +37,13 @@ class BrowserPool {
   async getPage(accountId, leadId) {
     const key = `${accountId}:${leadId}`;
 
-    // Проверяем есть ли уже страница для этой комбинации
     if (this.pages.has(key)) {
       const pageInfo = this.pages.get(key);
 
-      // ✅ Проверяем что страница не закрыта
       if (!pageInfo.page.isClosed()) {
         logger.info(`Reusing existing page for ${key}`);
         pageInfo.lastUsed = Date.now();
-        pageInfo.inUse = true; // ✅ Помечаем как используемую
+        pageInfo.inUse = true;
         return pageInfo.page;
       } else {
         logger.warn(`Page for ${key} was closed, creating new one`);
@@ -52,10 +51,8 @@ class BrowserPool {
       }
     }
 
-    // Создаём новую страницу
     const browser = this.browsers[Math.floor(Math.random() * this.browsers.length)];
 
-    // ✅ Проверяем что браузер не закрыт
     if (!browser || !browser.isConnected()) {
       throw new Error('Browser is not connected');
     }
@@ -70,14 +67,13 @@ class BrowserPool {
     this.pages.set(key, {
       page,
       lastUsed: Date.now(),
-      inUse: true // ✅ Помечаем как используемую
+      inUse: true
     });
 
     logger.info(`Created new page for ${key}`);
     return page;
   }
 
-  // ✅ Метод для освобождения страницы после использования
   releasePage(accountId, leadId) {
     const key = `${accountId}:${leadId}`;
     if (this.pages.has(key)) {
@@ -97,7 +93,6 @@ class BrowserPool {
     for (const [key, pageInfo] of this.pages.entries()) {
       const inactive = now - pageInfo.lastUsed > this.pageTimeout;
 
-      // ✅ НЕ закрываем страницы которые используются
       if (inactive && !pageInfo.inUse) {
         try {
           if (!pageInfo.page.isClosed()) {
@@ -122,7 +117,6 @@ class BrowserPool {
   async closeAll() {
     logger.info('Closing all browsers...');
 
-    // Закрываем все страницы
     for (const [key, pageInfo] of this.pages.entries()) {
       try {
         if (!pageInfo.page.isClosed()) {
@@ -135,7 +129,6 @@ class BrowserPool {
 
     this.pages.clear();
 
-    // Закрываем все браузеры
     for (const browser of this.browsers) {
       try {
         if (browser.isConnected()) {
