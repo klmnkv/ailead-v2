@@ -553,18 +553,29 @@ router.get('/amocrm/pipelines', async (req, res) => {
     try {
         const { account_id } = req.query;
 
+        logger.info('📊 Fetching pipelines for account', { account_id });
+
         if (!account_id) {
+            logger.error('❌ account_id not provided');
             return res.status(400).json({ error: 'account_id is required' });
         }
 
         // Находим интеграцию для данного amoCRM аккаунта
+        logger.info('🔍 Looking for integration', { amocrm_account_id: account_id });
         const integration = await Integration.findOne({
             where: { amocrm_account_id: parseInt(account_id as string) }
         });
 
         if (!integration) {
+            logger.error('❌ Integration not found', { amocrm_account_id: account_id });
             return res.status(404).json({ error: 'Integration not found' });
         }
+
+        logger.info('✅ Integration found', {
+            id: integration.id,
+            base_url: integration.base_url,
+            token_expiry: integration.token_expiry
+        });
 
         // Проверяем, не истек ли токен и обновляем при необходимости
         const now = Math.floor(Date.now() / 1000);
@@ -584,6 +595,7 @@ router.get('/amocrm/pipelines', async (req, res) => {
         }
 
         // Получаем воронки из amoCRM API
+        logger.info('📡 Requesting pipelines from amoCRM', { url: `${integration.base_url}/api/v4/leads/pipelines` });
         const pipelinesResponse = await axios.get(
             `${integration.base_url}/api/v4/leads/pipelines`,
             {
@@ -593,7 +605,9 @@ router.get('/amocrm/pipelines', async (req, res) => {
             }
         );
 
+        logger.info('✅ amoCRM API responded', { status: pipelinesResponse.status });
         const pipelines = pipelinesResponse.data._embedded?.pipelines || [];
+        logger.info('📦 Pipelines parsed', { count: pipelines.length });
 
         // Форматируем данные для фронтенда
         const formattedPipelines = pipelines.map((pipeline: any) => ({
