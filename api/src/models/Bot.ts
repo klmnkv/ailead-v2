@@ -10,6 +10,8 @@ export interface BotAttributes {
   stage_id?: number;
   is_active: boolean;
   prompt: string;
+  ai_provider?: string;
+  api_key?: string;
   model: string;
   temperature?: number;
   max_tokens?: number;
@@ -30,6 +32,8 @@ export class Bot extends Model<BotAttributes> implements BotAttributes {
   declare stage_id: number;
   declare is_active: boolean;
   declare prompt: string;
+  declare ai_provider: string;
+  declare api_key: string;
   declare model: string;
   declare temperature: number;
   declare max_tokens: number;
@@ -83,10 +87,20 @@ Bot.init(
       allowNull: false,
       comment: 'Промпт для AI'
     },
+    ai_provider: {
+      type: DataTypes.STRING(50),
+      defaultValue: 'openai',
+      comment: 'Провайдер AI (openai, anthropic)'
+    },
+    api_key: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+      comment: 'API ключ для провайдера AI'
+    },
     model: {
       type: DataTypes.STRING(50),
-      defaultValue: 'GPT-4',
-      comment: 'Модель AI (GPT-4, GPT-3.5, Claude)'
+      defaultValue: 'gpt-3.5-turbo',
+      comment: 'Модель AI (gpt-3.5-turbo, gpt-4, claude-3-sonnet, etc.)'
     },
     temperature: {
       type: DataTypes.DECIMAL(2, 1),

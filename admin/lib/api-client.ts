@@ -120,6 +120,8 @@ export interface Bot {
   name: string;
   description?: string;
   prompt: string;
+  ai_provider?: string;
+  api_key?: string;
   model: string;
   temperature: number;
   max_tokens: number;

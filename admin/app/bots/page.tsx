@@ -395,41 +395,84 @@ export default function BotsPage() {
               <div className="bg-white rounded-lg shadow">
                 <div className="px-6 py-4 border-b border-gray-200 flex items-center gap-2">
                   <h3 className="font-semibold text-gray-900">Параметры AI</h3>
-                  <HelpCircle className="w-4 h-4 text-gray-400 cursor-help" />
+                  <HelpCircle className="w-4 h-4 text-gray-400 cursor-help" title="Настройки для OpenAI/ChatGPT интеграции" />
                 </div>
                 <div className="p-6 space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Модель</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">API Провайдер</label>
                     <select
-                      value={getBotValue('model') || 'GPT-4'}
-                      onChange={(e) => updateBotField('model', e.target.value)}
+                      value={getBotValue('ai_provider') || 'openai'}
+                      onChange={(e) => updateBotField('ai_provider' as keyof Bot, e.target.value)}
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                     >
-                      <option>GPT-4</option>
-                      <option>GPT-3.5</option>
-                      <option>Claude 3.5 Sonnet</option>
+                      <option value="openai">OpenAI (GPT)</option>
+                      <option value="anthropic">Anthropic (Claude)</option>
                     </select>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Temperature (креативность)</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">API Ключ</label>
                     <input
-                      type="number"
-                      step="0.1"
-                      min="0"
-                      max="1"
-                      value={getBotValue('temperature') || 0.7}
-                      onChange={(e) => updateBotField('temperature', parseFloat(e.target.value))}
+                      type="password"
+                      value={getBotValue('api_key' as keyof Bot) || ''}
+                      onChange={(e) => updateBotField('api_key' as keyof Bot, e.target.value)}
+                      placeholder="sk-..."
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                     />
+                    <p className="text-xs text-gray-500 mt-1">
+                      🔒 Ваш API ключ хранится безопасно и используется только для генерации ответов
+                    </p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Модель</label>
+                    <select
+                      value={getBotValue('model') || 'gpt-3.5-turbo'}
+                      onChange={(e) => updateBotField('model', e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    >
+                      <optgroup label="OpenAI">
+                        <option value="gpt-3.5-turbo">GPT-3.5 Turbo (быстрее, дешевле)</option>
+                        <option value="gpt-4">GPT-4 (лучше качество)</option>
+                        <option value="gpt-4-turbo-preview">GPT-4 Turbo</option>
+                      </optgroup>
+                      <optgroup label="Anthropic">
+                        <option value="claude-3-opus-20240229">Claude 3 Opus</option>
+                        <option value="claude-3-sonnet-20240229">Claude 3 Sonnet</option>
+                        <option value="claude-3-haiku-20240307">Claude 3 Haiku</option>
+                      </optgroup>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Temperature (креативность): {getBotValue('temperature') || 0.7}
+                    </label>
+                    <input
+                      type="range"
+                      step="0.1"
+                      min="0"
+                      max="2"
+                      value={getBotValue('temperature') || 0.7}
+                      onChange={(e) => updateBotField('temperature', parseFloat(e.target.value))}
+                      className="w-full"
+                    />
+                    <div className="flex justify-between text-xs text-gray-500 mt-1">
+                      <span>0 (точные)</span>
+                      <span>1 (сбалансированные)</span>
+                      <span>2 (креативные)</span>
+                    </div>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Максимум токенов на ответ</label>
                     <input
                       type="number"
+                      min="50"
+                      max="4000"
                       value={getBotValue('max_tokens') || 500}
                       onChange={(e) => updateBotField('max_tokens', parseInt(e.target.value))}
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                     />
+                    <p className="text-xs text-gray-500 mt-1">
+                      💡 1 токен ≈ 4 символа. 500 токенов ≈ 2000 символов
+                    </p>
                   </div>
                 </div>
               </div>
