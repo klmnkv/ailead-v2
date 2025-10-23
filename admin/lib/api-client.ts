@@ -114,6 +114,24 @@ export interface AnalyticsData {
   period: string;
 }
 
+export interface Bot {
+  id: number;
+  account_id: number;
+  name: string;
+  description?: string;
+  prompt: string;
+  model: string;
+  temperature: number;
+  max_tokens: number;
+  funnel?: string;
+  stage?: string;
+  deactivation_conditions?: string;
+  deactivation_message?: string;
+  is_active: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
 // ============================================
 // API МЕТОДЫ
 // ============================================
@@ -211,6 +229,44 @@ export const api = {
 
   toggleScenario: async (id: number): Promise<Scenario> => {
     const response = await apiClient.post(`/api/scenarios/${id}/toggle`);
+    return response.data;
+  },
+
+  // Боты
+  getBots: async (account_id: number): Promise<Bot[]> => {
+    const response = await apiClient.get('/api/bots', {
+      params: { account_id }
+    });
+    return response.data;
+  },
+
+  getBot: async (id: number): Promise<Bot> => {
+    const response = await apiClient.get(`/api/bots/${id}`);
+    return response.data;
+  },
+
+  createBot: async (data: Partial<Bot>): Promise<Bot> => {
+    const response = await apiClient.post('/api/bots', data);
+    return response.data;
+  },
+
+  updateBot: async (id: number, data: Partial<Bot>): Promise<Bot> => {
+    const response = await apiClient.put(`/api/bots/${id}`, data);
+    return response.data;
+  },
+
+  deleteBot: async (id: number): Promise<{ success: boolean }> => {
+    const response = await apiClient.delete(`/api/bots/${id}`);
+    return response.data;
+  },
+
+  toggleBot: async (id: number): Promise<Bot> => {
+    const response = await apiClient.post(`/api/bots/${id}/toggle`);
+    return response.data;
+  },
+
+  duplicateBot: async (id: number): Promise<Bot> => {
+    const response = await apiClient.post(`/api/bots/${id}/duplicate`);
     return response.data;
   },
 };

@@ -2,6 +2,7 @@ import { Account } from './Account.js';
 import { Integration } from './Integration.js';
 import { Message } from './Message.js';
 import { Scenario } from './Scenario.js';
+import { Bot } from './Bot.js';
 
 // Связи
 Account.hasMany(Integration, {
@@ -34,4 +35,14 @@ Message.belongsTo(Integration, {
   as: 'integration'
 });
 
-export { Account, Integration, Message, Scenario };
+Account.hasMany(Bot, {
+  foreignKey: 'account_id',
+  as: 'bots'
+});
+
+Bot.belongsTo(Account, {
+  foreignKey: 'account_id',
+  as: 'account'
+});
+
+export { Account, Integration, Message, Scenario, Bot };

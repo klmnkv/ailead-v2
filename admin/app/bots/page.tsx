@@ -1,6 +1,8 @@
 'use client';
 
 import { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useSearchParams } from 'next/navigation';
 import {
   Menu,
   Plus,
@@ -10,80 +12,109 @@ import {
   HelpCircle,
   Upload,
   X,
-  Send
+  Send,
+  Loader2
 } from 'lucide-react';
-
-interface Bot {
-  id: number;
-  name: string;
-  description: string;
-  stage: string;
-  funnel: string;
-  is_active: boolean;
-  stats: string;
-  prompt: string;
-  model: string;
-  temperature: number;
-  max_tokens: number;
-  deactivation_conditions: string;
-  deactivation_message: string;
-  files: Array<{ name: string; size: string }>;
-  actions: {
-    move_stage: boolean;
-    assign_manager: boolean;
-    create_task: boolean;
-    send_notification: boolean;
-    add_tag: boolean;
-    add_note: boolean;
-  };
-}
-
-const initialBot: Bot = {
-  id: 1,
-  name: 'Консультант магазина',
-  description: 'Бот для первичного контакта с клиентами интернет-магазина',
-  stage: 'Первичный контакт',
-  funnel: 'Продажи',
-  is_active: true,
-  stats: '5 лидов обработано сегодня',
-  prompt: 'Ты - консультант интернет-магазина электроники. Твоя задача - помочь клиенту выбрать подходящий товар, ответить на вопросы о характеристиках и довести до покупки. Веди себя дружелюбно, но профессионально.',
-  model: 'GPT-4',
-  temperature: 0.5,
-  max_tokens: 500,
-  deactivation_conditions: 'Отключайся, если клиент просит поговорить с менеджером, хочет сделать заказ, задает сложные технические вопросы про интеграцию, или если я не могу ответить на вопрос после 2-3 попыток.',
-  deactivation_message: 'Спасибо за общение! Сейчас к вам присоединится наш менеджер.',
-  files: [
-    { name: 'Каталог товаров.pdf', size: '2.1 МБ' },
-    { name: 'FAQ.docx', size: '0.5 МБ' }
-  ],
-  actions: {
-    move_stage: true,
-    assign_manager: true,
-    create_task: false,
-    send_notification: true,
-    add_tag: false,
-    add_note: false
-  }
-};
+import { api, Bot } from '@/lib/api-client';
 
 export default function BotsPage() {
-  const [selectedBot, setSelectedBot] = useState<Bot>(initialBot);
+  const searchParams = useSearchParams();
+  const accountId = parseInt(searchParams.get('account_id') || '1');
+  const queryClient = useQueryClient();
+
+  const [selectedBotId, setSelectedBotId] = useState<number | null>(null);
   const [showTestModal, setShowTestModal] = useState(false);
   const [testMessage, setTestMessage] = useState('');
   const [testHistory, setTestHistory] = useState<Array<{text: string, isUser: boolean, time: string}>>([]);
+  const [editedBot, setEditedBot] = useState<Partial<Bot>>({});
+
+  // Fetch bots
+  const { data: bots = [], isLoading } = useQuery({
+    queryKey: ['bots', accountId],
+    queryFn: () => api.getBots(accountId),
+  });
+
+  // Select first bot if none selected
+  const selectedBot = bots.find(b => b.id === selectedBotId) || bots[0];
+
+  // Update mutation
+  const updateMutation = useMutation({
+    mutationFn: ({ id, data }: { id: number; data: Partial<Bot> }) => api.updateBot(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['bots', accountId] });
+      alert('Настройки бота сохранены!');
+      setEditedBot({});
+    },
+  });
+
+  // Delete mutation
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) => api.deleteBot(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['bots', accountId] });
+      setSelectedBotId(null);
+    },
+  });
+
+  // Toggle mutation
+  const toggleMutation = useMutation({
+    mutationFn: (id: number) => api.toggleBot(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['bots', accountId] });
+    },
+  });
+
+  // Create mutation
+  const createMutation = useMutation({
+    mutationFn: (data: Partial<Bot>) => api.createBot({ ...data, account_id: accountId }),
+    onSuccess: (newBot) => {
+      queryClient.invalidateQueries({ queryKey: ['bots', accountId] });
+      setSelectedBotId(newBot.id);
+    },
+  });
+
+  // Duplicate mutation
+  const duplicateMutation = useMutation({
+    mutationFn: (id: number) => api.duplicateBot(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['bots', accountId] });
+    },
+  });
 
   const handleSave = () => {
-    alert('Настройки бота сохранены!');
+    if (!selectedBot) return;
+    updateMutation.mutate({ id: selectedBot.id, data: editedBot });
   };
 
   const handleDelete = () => {
+    if (!selectedBot) return;
     if (confirm('Вы уверены, что хотите удалить этого бота? Это действие нельзя отменить.')) {
-      alert('Бот удален');
+      deleteMutation.mutate(selectedBot.id);
     }
   };
 
   const handleTest = () => {
     setShowTestModal(true);
+  };
+
+  const handleCreateBot = () => {
+    createMutation.mutate({
+      name: 'Новый бот',
+      description: 'Описание бота',
+      prompt: 'Ты - AI-помощник. Помогай пользователям с их вопросами.',
+      model: 'GPT-4',
+      temperature: 0.7,
+      max_tokens: 500,
+      is_active: false,
+    });
+  };
+
+  const updateBotField = <K extends keyof Bot>(field: K, value: Bot[K]) => {
+    setEditedBot(prev => ({ ...prev, [field]: value }));
+  };
+
+  const getBotValue = <K extends keyof Bot>(field: K): Bot[K] | undefined => {
+    return (editedBot[field] !== undefined ? editedBot[field] : selectedBot?.[field]) as Bot[K] | undefined;
   };
 
   const sendTestMessage = () => {
@@ -109,6 +140,14 @@ export default function BotsPage() {
     setTestMessage('');
   };
 
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -119,8 +158,16 @@ export default function BotsPage() {
             Управление AI-ботами для автоматизации работы с лидами
           </p>
         </div>
-        <button className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">
-          <Plus className="w-5 h-5" />
+        <button
+          onClick={handleCreateBot}
+          disabled={createMutation.isPending}
+          className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50"
+        >
+          {createMutation.isPending ? (
+            <Loader2 className="w-5 h-5 animate-spin" />
+          ) : (
+            <Plus className="w-5 h-5" />
+          )}
           <span>Создать нового бота</span>
         </button>
       </div>
@@ -128,216 +175,269 @@ export default function BotsPage() {
       <div className="grid grid-cols-12 gap-6">
         {/* Left Sidebar - Bot List */}
         <div className="col-span-3 space-y-4">
-          <div className="bg-white rounded-lg shadow p-4 border border-blue-200 cursor-pointer hover:shadow-lg transition">
-            <div className="font-semibold text-gray-900 mb-1">{selectedBot.name}</div>
-            <div className="text-sm text-gray-600 mb-2">{selectedBot.stage}</div>
-            <div className="text-xs text-gray-500 mb-3">{selectedBot.stats}</div>
-            <div className="flex items-center justify-between">
-              <span className={`text-xs font-medium ${selectedBot.is_active ? 'text-green-600' : 'text-gray-400'}`}>
-                ● {selectedBot.is_active ? 'Активен' : 'Неактивен'}
-              </span>
-              <button
-                onClick={() => setSelectedBot({...selectedBot, is_active: !selectedBot.is_active})}
-                className={`w-10 h-5 rounded-full transition ${selectedBot.is_active ? 'bg-blue-600' : 'bg-gray-300'}`}
+          {bots.length === 0 ? (
+            <div className="bg-white rounded-lg shadow p-6 text-center text-gray-500">
+              <p>Нет ботов</p>
+              <p className="text-sm mt-2">Создайте первого бота</p>
+            </div>
+          ) : (
+            bots.map((bot) => (
+              <div
+                key={bot.id}
+                onClick={() => {
+                  setSelectedBotId(bot.id);
+                  setEditedBot({});
+                }}
+                className={`bg-white rounded-lg shadow p-4 cursor-pointer hover:shadow-lg transition ${
+                  selectedBot?.id === bot.id ? 'border border-blue-200' : ''
+                }`}
               >
-                <div className={`w-4 h-4 bg-white rounded-full transition transform ${selectedBot.is_active ? 'translate-x-5' : 'translate-x-0.5'}`} />
-              </button>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-lg shadow p-4 opacity-50 cursor-pointer hover:opacity-70 transition">
-            <div className="font-semibold text-gray-900 mb-1">Квалификатор B2B</div>
-            <div className="text-sm text-gray-600 mb-2">Переговоры</div>
-            <div className="text-xs text-gray-500 mb-3">2 лида обработано сегодня</div>
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-gray-400">● Неактивен</span>
-            </div>
-          </div>
+                <div className="font-semibold text-gray-900 mb-1">{bot.name}</div>
+                <div className="text-sm text-gray-600 mb-2">{bot.stage || 'Не указан этап'}</div>
+                <div className="text-xs text-gray-500 mb-3">{bot.description || 'Без описания'}</div>
+                <div className="flex items-center justify-between">
+                  <span className={`text-xs font-medium ${bot.is_active ? 'text-green-600' : 'text-gray-400'}`}>
+                    ● {bot.is_active ? 'Активен' : 'Неактивен'}
+                  </span>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleMutation.mutate(bot.id);
+                    }}
+                    disabled={toggleMutation.isPending}
+                    className={`w-10 h-5 rounded-full transition ${bot.is_active ? 'bg-blue-600' : 'bg-gray-300'}`}
+                  >
+                    <div className={`w-4 h-4 bg-white rounded-full transition transform ${bot.is_active ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
         </div>
 
         {/* Right Content - Bot Settings */}
         <div className="col-span-9 space-y-6">
-          {/* Основная информация */}
-          <div className="bg-white rounded-lg shadow">
-            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-              <h3 className="font-semibold text-gray-900">Основная информация</h3>
+          {!selectedBot ? (
+            <div className="bg-white rounded-lg shadow p-12 text-center text-gray-500">
+              <p className="text-lg">Выберите бота из списка или создайте нового</p>
             </div>
-            <div className="p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Название бота</label>
-                <input
-                  type="text"
-                  value={selectedBot.name}
-                  onChange={(e) => setSelectedBot({...selectedBot, name: e.target.value})}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
+          ) : (
+            <>
+              {/* Основная информация */}
+              <div className="bg-white rounded-lg shadow">
+                <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+                  <h3 className="font-semibold text-gray-900">Основная информация</h3>
+                </div>
+                <div className="p-6 space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Название бота</label>
+                    <input
+                      type="text"
+                      value={getBotValue('name') || ''}
+                      onChange={(e) => updateBotField('name', e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Описание</label>
+                    <textarea
+                      value={getBotValue('description') || ''}
+                      onChange={(e) => updateBotField('description', e.target.value)}
+                      rows={2}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                </div>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Описание</label>
-                <textarea
-                  value={selectedBot.description}
-                  onChange={(e) => setSelectedBot({...selectedBot, description: e.target.value})}
-                  rows={2}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-              </div>
-            </div>
-          </div>
 
-          {/* Область работы */}
-          <div className="bg-white rounded-lg shadow">
-            <div className="px-6 py-4 border-b border-gray-200 flex items-center gap-2">
-              <h3 className="font-semibold text-gray-900">Область работы</h3>
-              <HelpCircle className="w-4 h-4 text-gray-400 cursor-help" />
-            </div>
-            <div className="p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Воронка</label>
-                <select
-                  value={selectedBot.funnel}
-                  onChange={(e) => setSelectedBot({...selectedBot, funnel: e.target.value})}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                >
-                  <option>Продажи</option>
-                  <option>Лиды с сайта</option>
-                  <option>Партнеры</option>
-                </select>
+              {/* Область работы */}
+              <div className="bg-white rounded-lg shadow">
+                <div className="px-6 py-4 border-b border-gray-200 flex items-center gap-2">
+                  <h3 className="font-semibold text-gray-900">Область работы</h3>
+                  <HelpCircle className="w-4 h-4 text-gray-400 cursor-help" />
+                </div>
+                <div className="p-6 space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Воронка</label>
+                    <input
+                      type="text"
+                      value={getBotValue('funnel') || ''}
+                      onChange={(e) => updateBotField('funnel', e.target.value)}
+                      placeholder="Например: Продажи"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Этап</label>
+                    <input
+                      type="text"
+                      value={getBotValue('stage') || ''}
+                      onChange={(e) => updateBotField('stage', e.target.value)}
+                      placeholder="Например: Первичный контакт"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Этап</label>
-                <select
-                  value={selectedBot.stage}
-                  onChange={(e) => setSelectedBot({...selectedBot, stage: e.target.value})}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                >
-                  <option>Первичный контакт</option>
-                  <option>Квалификация</option>
-                  <option>Переговоры</option>
-                </select>
-              </div>
-            </div>
-          </div>
 
-          {/* Инструкции для бота */}
-          <div className="bg-white rounded-lg shadow">
-            <div className="px-6 py-4 border-b border-gray-200 flex items-center gap-2">
-              <h3 className="font-semibold text-gray-900">Инструкции для бота</h3>
-              <HelpCircle className="w-4 h-4 text-gray-400 cursor-help" />
-            </div>
-            <div className="p-6">
-              <label className="block text-sm font-medium text-gray-700 mb-2">Промпт</label>
-              <textarea
-                value={selectedBot.prompt}
-                onChange={(e) => setSelectedBot({...selectedBot, prompt: e.target.value})}
-                rows={6}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-sm"
-              />
-            </div>
-          </div>
+              {/* Инструкции для бота */}
+              <div className="bg-white rounded-lg shadow">
+                <div className="px-6 py-4 border-b border-gray-200 flex items-center gap-2">
+                  <h3 className="font-semibold text-gray-900">Инструкции для бота</h3>
+                  <HelpCircle className="w-4 h-4 text-gray-400 cursor-help" />
+                </div>
+                <div className="p-6">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Промпт</label>
+                  <textarea
+                    value={getBotValue('prompt') || ''}
+                    onChange={(e) => updateBotField('prompt', e.target.value)}
+                    rows={6}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-sm"
+                  />
+                </div>
+              </div>
 
-          {/* Параметры AI */}
-          <div className="bg-white rounded-lg shadow">
-            <div className="px-6 py-4 border-b border-gray-200 flex items-center gap-2">
-              <h3 className="font-semibold text-gray-900">Параметры AI</h3>
-              <HelpCircle className="w-4 h-4 text-gray-400 cursor-help" />
-            </div>
-            <div className="p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Модель</label>
-                <select
-                  value={selectedBot.model}
-                  onChange={(e) => setSelectedBot({...selectedBot, model: e.target.value})}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                >
-                  <option>GPT-4 (рекомендуется)</option>
-                  <option>GPT-3.5 (быстрее, дешевле)</option>
-                  <option>Claude 3.5 Sonnet</option>
-                </select>
+              {/* Параметры AI */}
+              <div className="bg-white rounded-lg shadow">
+                <div className="px-6 py-4 border-b border-gray-200 flex items-center gap-2">
+                  <h3 className="font-semibold text-gray-900">Параметры AI</h3>
+                  <HelpCircle className="w-4 h-4 text-gray-400 cursor-help" />
+                </div>
+                <div className="p-6 space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Модель</label>
+                    <select
+                      value={getBotValue('model') || 'GPT-4'}
+                      onChange={(e) => updateBotField('model', e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option>GPT-4</option>
+                      <option>GPT-3.5</option>
+                      <option>Claude 3.5 Sonnet</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Temperature (креативность)</label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      min="0"
+                      max="1"
+                      value={getBotValue('temperature') || 0.7}
+                      onChange={(e) => updateBotField('temperature', parseFloat(e.target.value))}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Максимум токенов на ответ</label>
+                    <input
+                      type="number"
+                      value={getBotValue('max_tokens') || 500}
+                      onChange={(e) => updateBotField('max_tokens', parseInt(e.target.value))}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Максимум токенов на ответ</label>
-                <input
-                  type="number"
-                  value={selectedBot.max_tokens}
-                  onChange={(e) => setSelectedBot({...selectedBot, max_tokens: parseInt(e.target.value)})}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-            </div>
-          </div>
 
-          {/* Условия отключения */}
-          <div className="bg-white rounded-lg shadow">
-            <div className="px-6 py-4 border-b border-gray-200 flex items-center gap-2">
-              <h3 className="font-semibold text-gray-900">Условия отключения</h3>
-              <HelpCircle className="w-4 h-4 text-gray-400 cursor-help" />
-            </div>
-            <div className="p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Когда бот прекращает работу?</label>
-                <textarea
-                  value={selectedBot.deactivation_conditions}
-                  onChange={(e) => setSelectedBot({...selectedBot, deactivation_conditions: e.target.value})}
-                  rows={4}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
+              {/* Условия отключения */}
+              <div className="bg-white rounded-lg shadow">
+                <div className="px-6 py-4 border-b border-gray-200 flex items-center gap-2">
+                  <h3 className="font-semibold text-gray-900">Условия отключения</h3>
+                  <HelpCircle className="w-4 h-4 text-gray-400 cursor-help" />
+                </div>
+                <div className="p-6 space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Когда бот прекращает работу?</label>
+                    <textarea
+                      value={getBotValue('deactivation_conditions') || ''}
+                      onChange={(e) => updateBotField('deactivation_conditions', e.target.value)}
+                      rows={4}
+                      placeholder="Опишите условия, когда бот должен прекратить работу..."
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Сообщение при отключении</label>
+                    <input
+                      type="text"
+                      value={getBotValue('deactivation_message') || ''}
+                      onChange={(e) => updateBotField('deactivation_message', e.target.value)}
+                      placeholder="Сообщение, которое увидит клиент"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Сообщение при отключении</label>
-                <input
-                  type="text"
-                  value={selectedBot.deactivation_message}
-                  onChange={(e) => setSelectedBot({...selectedBot, deactivation_message: e.target.value})}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-            </div>
-          </div>
 
-          {/* Bottom Actions */}
-          <div className="bg-white rounded-lg shadow p-4 flex items-center justify-between sticky bottom-0">
-            <div className="flex items-center space-x-4">
-              <button
-                onClick={handleTest}
-                className="flex items-center space-x-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition"
-              >
-                <TestTube className="w-4 h-4" />
-                <span>Тестировать</span>
-              </button>
-              <div className="flex items-center space-x-2 text-sm text-green-600">
-                <div className="w-2 h-2 bg-green-600 rounded-full" />
-                <span>Сохранено в 14:25</span>
+              {/* Bottom Actions */}
+              <div className="bg-white rounded-lg shadow p-4 flex items-center justify-between sticky bottom-0">
+                <div className="flex items-center space-x-4">
+                  <button
+                    onClick={handleTest}
+                    className="flex items-center space-x-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition"
+                  >
+                    <TestTube className="w-4 h-4" />
+                    <span>Тестировать</span>
+                  </button>
+                  {Object.keys(editedBot).length === 0 && (
+                    <div className="flex items-center space-x-2 text-sm text-gray-500">
+                      <div className="w-2 h-2 bg-gray-400 rounded-full" />
+                      <span>Нет несохраненных изменений</span>
+                    </div>
+                  )}
+                  {Object.keys(editedBot).length > 0 && (
+                    <div className="flex items-center space-x-2 text-sm text-orange-600">
+                      <div className="w-2 h-2 bg-orange-600 rounded-full animate-pulse" />
+                      <span>Есть несохраненные изменения</span>
+                    </div>
+                  )}
+                </div>
+                <div className="flex items-center space-x-3">
+                  <button
+                    onClick={handleDelete}
+                    disabled={deleteMutation.isPending}
+                    className="flex items-center space-x-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition disabled:opacity-50"
+                  >
+                    {deleteMutation.isPending ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Trash2 className="w-4 h-4" />
+                    )}
+                    <span>Удалить бота</span>
+                  </button>
+                  <button
+                    onClick={() => setEditedBot({})}
+                    disabled={Object.keys(editedBot).length === 0}
+                    className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition disabled:opacity-50"
+                  >
+                    Отменить
+                  </button>
+                  <button
+                    onClick={handleSave}
+                    disabled={updateMutation.isPending || Object.keys(editedBot).length === 0}
+                    className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50"
+                  >
+                    {updateMutation.isPending ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Save className="w-4 h-4" />
+                    )}
+                    <span>Сохранить изменения</span>
+                  </button>
+                </div>
               </div>
-            </div>
-            <div className="flex items-center space-x-3">
-              <button
-                onClick={handleDelete}
-                className="flex items-center space-x-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition"
-              >
-                <Trash2 className="w-4 h-4" />
-                <span>Удалить бота</span>
-              </button>
-              <button className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition">
-                Отменить
-              </button>
-              <button
-                onClick={handleSave}
-                className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
-              >
-                <Save className="w-4 h-4" />
-                <span>Сохранить изменения</span>
-              </button>
-            </div>
-          </div>
+            </>
+          )}
         </div>
       </div>
 
       {/* Test Modal */}
-      {showTestModal && (
+      {showTestModal && selectedBot && (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl h-[600px] flex flex-col">
             <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-              <h3 className="font-semibold text-gray-900">🤖 Тестирование бота: {selectedBot.name}</h3>
+              <h3 className="font-semibold text-gray-900">Тестирование бота: {selectedBot.name}</h3>
               <button
                 onClick={() => setShowTestModal(false)}
                 className="text-gray-400 hover:text-gray-600"
