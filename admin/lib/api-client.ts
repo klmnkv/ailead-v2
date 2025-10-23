@@ -123,13 +123,29 @@ export interface Bot {
   model: string;
   temperature: number;
   max_tokens: number;
-  funnel?: string;
-  stage?: string;
+  pipeline_id?: number;
+  stage_id?: number;
   deactivation_conditions?: string;
   deactivation_message?: string;
   is_active: boolean;
   created_at?: string;
   updated_at?: string;
+}
+
+export interface Pipeline {
+  id: number;
+  name: string;
+  sort: number;
+  is_main: boolean;
+  stages: Stage[];
+}
+
+export interface Stage {
+  id: number;
+  name: string;
+  sort: number;
+  color: string;
+  pipeline_id: number;
 }
 
 // ============================================
@@ -267,6 +283,14 @@ export const api = {
 
   duplicateBot: async (id: number): Promise<Bot> => {
     const response = await apiClient.post(`/api/bots/${id}/duplicate`);
+    return response.data;
+  },
+
+  // Воронки и этапы
+  getPipelines: async (account_id: number): Promise<Pipeline[]> => {
+    const response = await apiClient.get('/api/integrations/amocrm/pipelines', {
+      params: { account_id }
+    });
     return response.data;
   },
 };

@@ -510,4 +510,86 @@ router.get('/amocrm/callback', async (req, res) => {
     }
 });
 
+/**
+ * Получить воронки и этапы из amoCRM
+ * GET /api/integrations/amocrm/pipelines?account_id=123
+ */
+router.get('/amocrm/pipelines', async (req, res) => {
+    try {
+        const { account_id } = req.query;
+
+        if (!account_id) {
+            return res.status(400).json({ error: 'account_id is required' });
+        }
+
+        // Находим интеграцию для данного аккаунта
+        const integration = await Integration.findOne({
+            where: { account_id: parseInt(account_id as string) }
+        });
+
+        if (!integration) {
+            return res.status(404).json({ error: 'Integration not found' });
+        }
+
+        // Проверяем, не истек ли токен
+        const now = Math.floor(Date.now() / 1000);
+        if (integration.token_expiry <= now) {
+            logger.warn('⚠️ Access token expired, refreshing...');
+
+            // TODO: Реализовать обновление токена
+            // Пока возвращаем ошибку
+            return res.status(401).json({ error: 'Token expired, please reconnect integration' });
+        }
+
+        // Получаем воронки из amoCRM API
+        const pipelinesResponse = await axios.get(
+            `${integration.base_url}/api/v4/leads/pipelines`,
+            {
+                headers: {
+                    Authorization: `Bearer ${integration.access_token}`
+                }
+            }
+        );
+
+        const pipelines = pipelinesResponse.data._embedded?.pipelines || [];
+
+        // Форматируем данные для фронтенда
+        const formattedPipelines = pipelines.map((pipeline: any) => ({
+            id: pipeline.id,
+            name: pipeline.name,
+            sort: pipeline.sort,
+            is_main: pipeline.is_main,
+            stages: Object.values(pipeline._embedded?.statuses || {}).map((status: any) => ({
+                id: status.id,
+                name: status.name,
+                sort: status.sort,
+                color: status.color,
+                pipeline_id: status.pipeline_id
+            }))
+        }));
+
+        logger.info('✅ Pipelines fetched successfully', {
+            count: formattedPipelines.length
+        });
+
+        return res.json(formattedPipelines);
+    } catch (error: any) {
+        logger.error('❌ Error fetching pipelines:', {
+            message: error.message,
+            response: error.response?.data
+        });
+
+        if (error.response?.status === 401) {
+            return res.status(401).json({
+                error: 'Authorization failed, please reconnect integration'
+            });
+        }
+
+        return res.status(500).json({
+            error: 'Failed to fetch pipelines',
+            details: error.message
+        });
+    }
+});
+
 export default router;

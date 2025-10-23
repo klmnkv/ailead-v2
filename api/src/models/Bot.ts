@@ -6,8 +6,8 @@ export interface BotAttributes {
   account_id: number;
   name: string;
   description?: string;
-  funnel?: string;
-  stage?: string;
+  pipeline_id?: number;
+  stage_id?: number;
   is_active: boolean;
   prompt: string;
   model: string;
@@ -26,8 +26,8 @@ export class Bot extends Model<BotAttributes> implements BotAttributes {
   declare account_id: number;
   declare name: string;
   declare description: string;
-  declare funnel: string;
-  declare stage: string;
+  declare pipeline_id: number;
+  declare stage_id: number;
   declare is_active: boolean;
   declare prompt: string;
   declare model: string;
@@ -63,15 +63,15 @@ Bot.init(
       allowNull: true,
       comment: 'Описание бота'
     },
-    funnel: {
-      type: DataTypes.STRING(100),
+    pipeline_id: {
+      type: DataTypes.INTEGER,
       allowNull: true,
-      comment: 'Воронка'
+      comment: 'ID воронки в amoCRM'
     },
-    stage: {
-      type: DataTypes.STRING(100),
+    stage_id: {
+      type: DataTypes.INTEGER,
       allowNull: true,
-      comment: 'Этап воронки'
+      comment: 'ID этапа воронки в amoCRM'
     },
     is_active: {
       type: DataTypes.BOOLEAN,

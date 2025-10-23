@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'next/navigation';
 import {
@@ -34,8 +34,40 @@ export default function BotsPage() {
     queryFn: () => api.getBots(accountId),
   });
 
+  // Fetch pipelines
+  const { data: pipelines = [], isLoading: isPipelinesLoading } = useQuery({
+    queryKey: ['pipelines', accountId],
+    queryFn: () => api.getPipelines(accountId),
+  });
+
   // Select first bot if none selected
   const selectedBot = bots.find(b => b.id === selectedBotId) || bots[0];
+
+  // Helper functions
+  const getPipelineName = (pipelineId?: number) => {
+    if (!pipelineId) return 'Не указана';
+    return pipelines.find(p => p.id === pipelineId)?.name || 'Не найдена';
+  };
+
+  const getStageName = (stageId?: number) => {
+    if (!stageId) return 'Не указан';
+    for (const pipeline of pipelines) {
+      const stage = pipeline.stages.find(s => s.id === stageId);
+      if (stage) return stage.name;
+    }
+    return 'Не найден';
+  };
+
+  // Get stages for selected pipeline
+  const selectedPipelineId = editedBot.pipeline_id !== undefined
+    ? editedBot.pipeline_id
+    : selectedBot?.pipeline_id;
+
+  const availableStages = useMemo(() => {
+    if (!selectedPipelineId) return [];
+    const pipeline = pipelines.find(p => p.id === selectedPipelineId);
+    return pipeline?.stages || [];
+  }, [selectedPipelineId, pipelines]);
 
   // Update mutation
   const updateMutation = useMutation({
@@ -193,7 +225,7 @@ export default function BotsPage() {
                 }`}
               >
                 <div className="font-semibold text-gray-900 mb-1">{bot.name}</div>
-                <div className="text-sm text-gray-600 mb-2">{bot.stage || 'Не указан этап'}</div>
+                <div className="text-sm text-gray-600 mb-2">{getStageName(bot.stage_id)}</div>
                 <div className="text-xs text-gray-500 mb-3">{bot.description || 'Без описания'}</div>
                 <div className="flex items-center justify-between">
                   <span className={`text-xs font-medium ${bot.is_active ? 'text-green-600' : 'text-gray-400'}`}>
@@ -259,23 +291,58 @@ export default function BotsPage() {
                 <div className="p-6 space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Воронка</label>
-                    <input
-                      type="text"
-                      value={getBotValue('funnel') || ''}
-                      onChange={(e) => updateBotField('funnel', e.target.value)}
-                      placeholder="Например: Продажи"
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                    />
+                    {isPipelinesLoading ? (
+                      <div className="w-full px-4 py-2 border border-gray-300 rounded-lg flex items-center gap-2 text-gray-500">
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>Загрузка воронок...</span>
+                      </div>
+                    ) : (
+                      <select
+                        value={getBotValue('pipeline_id') || ''}
+                        onChange={(e) => {
+                          const pipelineId = e.target.value ? parseInt(e.target.value) : null;
+                          updateBotField('pipeline_id', pipelineId as any);
+                          // Сбрасываем этап при смене воронки
+                          updateBotField('stage_id', null as any);
+                        }}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value="">Выберите воронку</option>
+                        {pipelines.map((pipeline) => (
+                          <option key={pipeline.id} value={pipeline.id}>
+                            {pipeline.name}
+                          </option>
+                        ))}
+                      </select>
+                    )}
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Этап</label>
-                    <input
-                      type="text"
-                      value={getBotValue('stage') || ''}
-                      onChange={(e) => updateBotField('stage', e.target.value)}
-                      placeholder="Например: Первичный контакт"
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                    />
+                    {isPipelinesLoading ? (
+                      <div className="w-full px-4 py-2 border border-gray-300 rounded-lg flex items-center gap-2 text-gray-500">
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>Загрузка этапов...</span>
+                      </div>
+                    ) : (
+                      <select
+                        value={getBotValue('stage_id') || ''}
+                        onChange={(e) => {
+                          const stageId = e.target.value ? parseInt(e.target.value) : null;
+                          updateBotField('stage_id', stageId as any);
+                        }}
+                        disabled={!selectedPipelineId}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                      >
+                        <option value="">
+                          {!selectedPipelineId ? 'Сначала выберите воронку' : 'Выберите этап'}
+                        </option>
+                        {availableStages.map((stage) => (
+                          <option key={stage.id} value={stage.id}>
+                            {stage.name}
+                          </option>
+                        ))}
+                      </select>
+                    )}
                   </div>
                 </div>
               </div>
