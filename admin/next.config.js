@@ -12,6 +12,25 @@ const nextConfig = {
     ];
   },
 
+  // Разрешить загрузку в iframe
+  async headers() {
+    return [
+      {
+        source: '/:path*',
+        headers: [
+          {
+            key: 'X-Frame-Options',
+            value: 'ALLOWALL',
+          },
+          {
+            key: 'Content-Security-Policy',
+            value: "frame-ancestors 'self' http://localhost:* http://127.0.0.1:* https://*.amocrm.ru https://*.amocrm.com",
+          },
+        ],
+      },
+    ];
+  },
+
   // Оптимизация
   compiler: {
     removeConsole: process.env.NODE_ENV === 'production',
