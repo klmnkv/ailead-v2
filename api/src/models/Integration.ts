@@ -23,9 +23,23 @@ interface IntegrationCreationAttributes
 export class Integration extends Model<
   IntegrationAttributes,
   IntegrationCreationAttributes
-> {
+> implements IntegrationAttributes {
+  declare id: number;
+  declare account_id: number;
+  declare amocrm_account_id: number;
+  declare domain: string;
+  declare base_url: string;
+  declare access_token: string;
+  declare refresh_token: string;
+  declare token_expiry: number;
+  declare email?: string;
+  declare password?: string;
+  declare status: string;
+  declare created_at?: Date;
+  declare updated_at?: Date;
+
   toJSON() {
-    const values = super.toJSON();
+    const values = super.toJSON() as any;
     delete values.access_token;
     delete values.refresh_token;
     delete values.password;

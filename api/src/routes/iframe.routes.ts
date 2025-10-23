@@ -296,6 +296,37 @@ router.get('/panel/:account_id', async (req, res) => {
                 @keyframes spin {
                     to { transform: rotate(360deg); }
                 }
+
+                /* Range Input */
+                .form-range {
+                    width: 100%;
+                    height: 6px;
+                    border-radius: 3px;
+                    background: #e2e8f0;
+                    outline: none;
+                    -webkit-appearance: none;
+                }
+
+                .form-range::-webkit-slider-thumb {
+                    -webkit-appearance: none;
+                    appearance: none;
+                    width: 18px;
+                    height: 18px;
+                    border-radius: 50%;
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    cursor: pointer;
+                    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.4);
+                }
+
+                .form-range::-moz-range-thumb {
+                    width: 18px;
+                    height: 18px;
+                    border-radius: 50%;
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    cursor: pointer;
+                    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.4);
+                    border: none;
+                }
                 
                 /* Toggle Switch */
                 .toggle-container {
@@ -483,13 +514,86 @@ router.get('/panel/:account_id', async (req, res) => {
                                 </div>
                             </div>
                             
+                            <!-- AI Integration Settings -->
                             <div class="form-group">
-                                <label class="form-label">Модель AI</label>
-                                <select class="form-select">
-                                    <option>GPT-4 (рекомендуется)</option>
-                                    <option>GPT-3.5 (быстрее, дешевле)</option>
-                                    <option>Claude 3.5 Sonnet</option>
-                                </select>
+                                <div class="toggle-container">
+                                    <div class="toggle-label">🤖 Включить AI интеграцию</div>
+                                    <div class="toggle-switch" id="ai-enabled-toggle" onclick="toggleAI(this)"></div>
+                                </div>
+                                <div class="info-box" style="margin-top: 8px;">
+                                    💡 При включении бот будет использовать AI для генерации ответов
+                                </div>
+                            </div>
+
+                            <div id="ai-settings" style="display: none;">
+                                <div class="form-group">
+                                    <label class="form-label">Провайдер AI</label>
+                                    <select class="form-select" id="ai-provider" onchange="updateModelsList()">
+                                        <option value="openai">OpenAI (GPT)</option>
+                                        <option value="anthropic">Anthropic (Claude)</option>
+                                    </select>
+                                </div>
+
+                                <div class="form-group">
+                                    <label class="form-label">API Ключ</label>
+                                    <input
+                                        type="password"
+                                        id="ai-api-key"
+                                        class="form-input"
+                                        placeholder="sk-..."
+                                    />
+                                    <div class="info-box" style="margin-top: 8px;">
+                                        🔒 Ваш API ключ хранится безопасно и используется только для генерации ответов
+                                    </div>
+                                </div>
+
+                                <div class="form-group">
+                                    <label class="form-label">Модель</label>
+                                    <select class="form-select" id="ai-model">
+                                        <option value="gpt-3.5-turbo">GPT-3.5 Turbo (быстрее, дешевле)</option>
+                                        <option value="gpt-4">GPT-4 (лучше качество)</option>
+                                        <option value="gpt-4-turbo-preview">GPT-4 Turbo</option>
+                                    </select>
+                                </div>
+
+                                <div class="form-group">
+                                    <label class="form-label">Температура (креативность): <span id="temperature-value">0.7</span></label>
+                                    <input
+                                        type="range"
+                                        id="ai-temperature"
+                                        class="form-range"
+                                        min="0"
+                                        max="2"
+                                        step="0.1"
+                                        value="0.7"
+                                        oninput="updateTemperature(this.value)"
+                                    />
+                                    <div class="info-box" style="margin-top: 8px;">
+                                        💡 0 = более точные ответы, 2 = более креативные ответы
+                                    </div>
+                                </div>
+
+                                <div class="form-group">
+                                    <label class="form-label">Максимальная длина ответа (токены)</label>
+                                    <input
+                                        type="number"
+                                        id="ai-max-tokens"
+                                        class="form-input"
+                                        value="500"
+                                        min="50"
+                                        max="4000"
+                                    />
+                                    <div class="info-box" style="margin-top: 8px;">
+                                        💡 1 токен ≈ 4 символа. 500 токенов ≈ 2000 символов
+                                    </div>
+                                </div>
+
+                                <div class="form-group">
+                                    <button class="btn btn-secondary" onclick="testAIConnection()">
+                                        🧪 Проверить подключение
+                                    </button>
+                                    <span id="ai-test-result" style="margin-left: 10px;"></span>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -584,23 +688,162 @@ router.get('/panel/:account_id', async (req, res) => {
                 function toggleSwitch(element) {
                     element.classList.toggle('active');
                 }
-                
-                function saveSettings() {
+
+                function toggleAI(element) {
+                    element.classList.toggle('active');
+                    const aiSettings = document.getElementById('ai-settings');
+                    if (element.classList.contains('active')) {
+                        aiSettings.style.display = 'block';
+                    } else {
+                        aiSettings.style.display = 'none';
+                    }
+                }
+
+                function updateTemperature(value) {
+                    document.getElementById('temperature-value').textContent = value;
+                }
+
+                async function updateModelsList() {
+                    const provider = document.getElementById('ai-provider').value;
+                    const modelSelect = document.getElementById('ai-model');
+
+                    try {
+                        const response = await fetch('/api/bot/ai/models?provider=' + provider);
+                        const data = await response.json();
+
+                        modelSelect.innerHTML = '';
+                        data.models.forEach(model => {
+                            const option = document.createElement('option');
+                            option.value = model.value;
+                            option.textContent = model.label;
+                            modelSelect.appendChild(option);
+                        });
+                    } catch (error) {
+                        console.error('Error fetching models:', error);
+                    }
+                }
+
+                async function testAIConnection() {
+                    const resultSpan = document.getElementById('ai-test-result');
+                    resultSpan.textContent = '⏳ Проверка...';
+                    resultSpan.style.color = '#666';
+
+                    const aiConfig = {
+                        enabled: true,
+                        provider: document.getElementById('ai-provider').value,
+                        model: document.getElementById('ai-model').value,
+                        api_key: document.getElementById('ai-api-key').value,
+                        temperature: parseFloat(document.getElementById('ai-temperature').value),
+                        max_tokens: parseInt(document.getElementById('ai-max-tokens').value)
+                    };
+
+                    try {
+                        const response = await fetch('/api/bot/ai/test', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({ ai: aiConfig })
+                        });
+
+                        const data = await response.json();
+
+                        if (response.ok && data.success) {
+                            resultSpan.textContent = '✓ Подключение успешно (' + data.duration + 'ms)';
+                            resultSpan.style.color = '#22c55e';
+                        } else {
+                            resultSpan.textContent = '✗ Ошибка: ' + (data.error || 'Неизвестная ошибка');
+                            resultSpan.style.color = '#ef4444';
+                        }
+                    } catch (error) {
+                        resultSpan.textContent = '✗ Ошибка: ' + error.message;
+                        resultSpan.style.color = '#ef4444';
+                    }
+                }
+
+                async function saveSettings() {
                     const saveBtn = event.target;
                     const originalHTML = saveBtn.innerHTML;
-                    
+
                     saveBtn.innerHTML = '<span class="loading"></span> Сохранение...';
                     saveBtn.disabled = true;
-                    
-                    setTimeout(() => {
-                        saveBtn.innerHTML = '✓ Сохранено';
+
+                    // Собираем все настройки
+                    const aiEnabled = document.getElementById('ai-enabled-toggle').classList.contains('active');
+                    const config = {
+                        auto_process: true,
+                        prompt: document.querySelector('textarea.form-textarea').value,
+                        ai: {
+                            enabled: aiEnabled,
+                            provider: document.getElementById('ai-provider').value,
+                            model: document.getElementById('ai-model').value,
+                            api_key: document.getElementById('ai-api-key').value,
+                            temperature: parseFloat(document.getElementById('ai-temperature').value),
+                            max_tokens: parseInt(document.getElementById('ai-max-tokens').value)
+                        }
+                    };
+
+                    try {
+                        const response = await fetch('/api/bot/config', {
+                            method: 'PUT',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify(config)
+                        });
+
+                        if (response.ok) {
+                            saveBtn.innerHTML = '✓ Сохранено';
+                            setTimeout(() => {
+                                saveBtn.innerHTML = originalHTML;
+                                saveBtn.disabled = false;
+                            }, 1500);
+                        } else {
+                            throw new Error('Failed to save');
+                        }
+                    } catch (error) {
+                        saveBtn.innerHTML = '✗ Ошибка';
                         setTimeout(() => {
                             saveBtn.innerHTML = originalHTML;
                             saveBtn.disabled = false;
-                        }, 1500);
-                    }, 1000);
+                        }, 2000);
+                    }
                 }
-                
+
+                // Загрузка настроек при загрузке страницы
+                async function loadSettings() {
+                    try {
+                        const response = await fetch('/api/bot/config');
+                        const config = await response.json();
+
+                        if (config.prompt) {
+                            document.querySelector('textarea.form-textarea').value = config.prompt;
+                        }
+
+                        if (config.ai) {
+                            // Устанавливаем значения AI настроек
+                            const aiToggle = document.getElementById('ai-enabled-toggle');
+                            if (config.ai.enabled) {
+                                aiToggle.classList.add('active');
+                                document.getElementById('ai-settings').style.display = 'block';
+                            }
+
+                            document.getElementById('ai-provider').value = config.ai.provider || 'openai';
+                            document.getElementById('ai-model').value = config.ai.model || 'gpt-3.5-turbo';
+                            document.getElementById('ai-api-key').value = config.ai.api_key || '';
+                            document.getElementById('ai-temperature').value = config.ai.temperature || 0.7;
+                            document.getElementById('ai-max-tokens').value = config.ai.max_tokens || 500;
+
+                            updateTemperature(config.ai.temperature || 0.7);
+                        }
+                    } catch (error) {
+                        console.error('Error loading settings:', error);
+                    }
+                }
+
+                // Загружаем настройки при старте
+                window.addEventListener('DOMContentLoaded', loadSettings);
+
                 function testBot() {
                     alert('Функция тестирования в разработке');
                 }
