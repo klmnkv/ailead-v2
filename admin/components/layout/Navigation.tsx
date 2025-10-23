@@ -11,7 +11,8 @@ import {
   Settings,
   Activity,
   Menu,
-  X
+  X,
+  Bot
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -21,6 +22,7 @@ function cn(...classes: (string | undefined | null | false)[]) {
 
 const navigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
+  { name: 'Боты', href: '/bots', icon: Bot },
   { name: 'Отправить', href: '/send', icon: Send },
   { name: 'История', href: '/history', icon: History },
   { name: 'Аналитика', href: '/analytics', icon: BarChart3 },
