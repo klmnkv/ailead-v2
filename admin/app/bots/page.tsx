@@ -35,9 +35,10 @@ export default function BotsPage() {
   });
 
   // Fetch pipelines
-  const { data: pipelines = [], isLoading: isPipelinesLoading } = useQuery({
+  const { data: pipelines = [], isLoading: isPipelinesLoading, error: pipelinesError } = useQuery({
     queryKey: ['pipelines', accountId],
     queryFn: () => api.getPipelines(accountId),
+    retry: false,
   });
 
   // Select first bot if none selected
@@ -289,12 +290,34 @@ export default function BotsPage() {
                   <HelpCircle className="w-4 h-4 text-gray-400 cursor-help" />
                 </div>
                 <div className="p-6 space-y-4">
+                  {pipelinesError && (
+                    <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+                      <div className="flex items-start gap-3">
+                        <div className="text-red-600">⚠️</div>
+                        <div className="flex-1">
+                          <h4 className="text-sm font-semibold text-red-900 mb-1">
+                            Требуется переподключение интеграции
+                          </h4>
+                          <p className="text-sm text-red-700 mb-2">
+                            Токен доступа к amoCRM устарел. Переподключите интеграцию в настройках виджета в amoCRM.
+                          </p>
+                          <p className="text-xs text-red-600">
+                            Откройте amoCRM → Настройки → Интеграции → VoiceLead AI → Настроить
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Воронка</label>
                     {isPipelinesLoading ? (
                       <div className="w-full px-4 py-2 border border-gray-300 rounded-lg flex items-center gap-2 text-gray-500">
                         <Loader2 className="w-4 h-4 animate-spin" />
                         <span>Загрузка воронок...</span>
+                      </div>
+                    ) : pipelinesError ? (
+                      <div className="w-full px-4 py-2 border border-red-300 bg-red-50 rounded-lg flex items-center gap-2 text-red-600">
+                        <span>Ошибка загрузки воронок</span>
                       </div>
                     ) : (
                       <select
@@ -322,6 +345,10 @@ export default function BotsPage() {
                       <div className="w-full px-4 py-2 border border-gray-300 rounded-lg flex items-center gap-2 text-gray-500">
                         <Loader2 className="w-4 h-4 animate-spin" />
                         <span>Загрузка этапов...</span>
+                      </div>
+                    ) : pipelinesError ? (
+                      <div className="w-full px-4 py-2 border border-red-300 bg-red-50 rounded-lg flex items-center gap-2 text-red-600">
+                        <span>Ошибка загрузки этапов</span>
                       </div>
                     ) : (
                       <select

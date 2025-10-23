@@ -570,7 +570,17 @@ router.get('/amocrm/pipelines', async (req, res) => {
         const now = Math.floor(Date.now() / 1000);
         if (integration.token_expiry <= now) {
             logger.warn('⚠️ Access token expired, refreshing...');
-            await refreshAccessToken(integration);
+            try {
+                await refreshAccessToken(integration);
+            } catch (refreshError) {
+                // Если не удалось обновить токен - нужно переподключить интеграцию
+                logger.error('❌ Token refresh failed, reconnection required');
+                return res.status(401).json({
+                    error: 'Token refresh failed',
+                    message: 'Интеграция с amoCRM требует переподключения',
+                    reconnect_required: true
+                });
+            }
         }
 
         // Получаем воронки из amoCRM API
