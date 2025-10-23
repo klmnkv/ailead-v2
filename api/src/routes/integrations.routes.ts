@@ -6,6 +6,41 @@ import { logger } from '../utils/logger.js';
 const router = Router();
 
 /**
+ * Обновить токен доступа через refresh_token
+ */
+async function refreshAccessToken(integration: Integration): Promise<void> {
+    try {
+        logger.info('🔄 Refreshing access token...');
+
+        const tokenUrl = `${integration.base_url}/oauth2/access_token`;
+
+        const response = await axios.post(tokenUrl, {
+            client_id: process.env.AMOCRM_CLIENT_ID,
+            client_secret: process.env.AMOCRM_CLIENT_SECRET,
+            grant_type: 'refresh_token',
+            refresh_token: integration.refresh_token,
+            redirect_uri: `${process.env.API_DOMAIN || 'http://localhost:4000'}/api/integrations/amocrm/callback`
+        });
+
+        const { access_token, refresh_token, expires_in } = response.data;
+
+        await integration.update({
+            access_token,
+            refresh_token,
+            token_expiry: Math.floor(Date.now() / 1000) + expires_in
+        });
+
+        logger.info('✅ Access token refreshed successfully');
+    } catch (error: any) {
+        logger.error('❌ Failed to refresh access token:', {
+            message: error.message,
+            response: error.response?.data
+        });
+        throw new Error('Failed to refresh access token');
+    }
+}
+
+/**
  * OAuth callback от amoCRM
  * GET /api/integrations/amocrm/callback?code=xxx&state=xxx&referer=xxx
  */
@@ -531,14 +566,11 @@ router.get('/amocrm/pipelines', async (req, res) => {
             return res.status(404).json({ error: 'Integration not found' });
         }
 
-        // Проверяем, не истек ли токен
+        // Проверяем, не истек ли токен и обновляем при необходимости
         const now = Math.floor(Date.now() / 1000);
         if (integration.token_expiry <= now) {
             logger.warn('⚠️ Access token expired, refreshing...');
-
-            // TODO: Реализовать обновление токена
-            // Пока возвращаем ошибку
-            return res.status(401).json({ error: 'Token expired, please reconnect integration' });
+            await refreshAccessToken(integration);
         }
 
         // Получаем воронки из amoCRM API
