@@ -14,29 +14,16 @@ import {
   AlertCircle,
 } from 'lucide-react';
 
-// Mock API для сценариев (замените на реальный API)
-interface Scenario {
-  id: number;
-  name: string;
-  description: string;
-  is_active: boolean;
-  steps: number;
-  created_at: string;
-  last_run?: string;
-  runs_count: number;
-}
+import { api, Scenario } from '../../lib/api-client';
 
 export default function ScenariosPage() {
   const [isCreating, setIsCreating] = useState(false);
   const queryClient = useQueryClient();
 
-  // Загрузка сценариев (заглушка)
+  // Загрузка сценариев
   const { data: scenarios, isLoading } = useQuery({
     queryKey: ['scenarios'],
-    queryFn: async () => {
-      // TODO: Заменить на реальный API
-      return mockScenarios;
-    },
+    queryFn: api.getScenarios,
   });
 
   return (
@@ -175,6 +162,43 @@ function StatCard({ title, value, icon: Icon, color }: StatCardProps) {
 }
 
 function ScenarioCard({ scenario }: { scenario: Scenario }) {
+  const queryClient = useQueryClient();
+
+  const deleteMutation = useMutation({
+    mutationFn: api.deleteScenario,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['scenarios'] });
+    },
+  });
+
+  const duplicateMutation = useMutation({
+    mutationFn: api.duplicateScenario,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['scenarios'] });
+    },
+  });
+
+  const toggleMutation = useMutation({
+    mutationFn: api.toggleScenario,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['scenarios'] });
+    },
+  });
+
+  const handleDelete = () => {
+    if (confirm(`Вы уверены, что хотите удалить сценарий "${scenario.name}"?`)) {
+      deleteMutation.mutate(scenario.id);
+    }
+  };
+
+  const handleDuplicate = () => {
+    duplicateMutation.mutate(scenario.id);
+  };
+
+  const handleToggle = () => {
+    toggleMutation.mutate(scenario.id);
+  };
+
   return (
     <div className="bg-white rounded-lg shadow hover:shadow-lg transition p-6">
       {/* Заголовок и статус */}
@@ -216,17 +240,22 @@ function ScenarioCard({ scenario }: { scenario: Scenario }) {
           <button
             className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition"
             title="Редактировать"
+            disabled
           >
             <Edit className="w-4 h-4" />
           </button>
           <button
-            className="p-2 text-gray-600 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition"
+            onClick={handleDuplicate}
+            disabled={duplicateMutation.isPending}
+            className="p-2 text-gray-600 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition disabled:opacity-50"
             title="Дублировать"
           >
             <Copy className="w-4 h-4" />
           </button>
           <button
-            className="p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition"
+            onClick={handleDelete}
+            disabled={deleteMutation.isPending}
+            className="p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition disabled:opacity-50"
             title="Удалить"
           >
             <Trash2 className="w-4 h-4" />
@@ -234,7 +263,9 @@ function ScenarioCard({ scenario }: { scenario: Scenario }) {
         </div>
 
         <button
-          className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition ${
+          onClick={handleToggle}
+          disabled={toggleMutation.isPending}
+          className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition disabled:opacity-50 ${
             scenario.is_active
               ? 'bg-gray-100 text-gray-700 hover:bg-gray-200'
               : 'bg-green-100 text-green-700 hover:bg-green-200'
@@ -257,48 +288,3 @@ function ScenarioCard({ scenario }: { scenario: Scenario }) {
   );
 }
 
-// ============================================
-// MOCK DATA
-// ============================================
-
-const mockScenarios: Scenario[] = [
-  {
-    id: 1,
-    name: 'Приветствие новых лидов',
-    description: 'Автоматическая отправка приветственного сообщения новым лидам',
-    is_active: true,
-    steps: 3,
-    created_at: '2024-01-15T10:00:00Z',
-    last_run: '2024-01-20T14:30:00Z',
-    runs_count: 127,
-  },
-  {
-    id: 2,
-    name: 'Напоминание о встрече',
-    description: 'Отправка напоминания за 1 час до запланированной встречи',
-    is_active: true,
-    steps: 5,
-    created_at: '2024-01-10T09:00:00Z',
-    last_run: '2024-01-20T11:00:00Z',
-    runs_count: 89,
-  },
-  {
-    id: 3,
-    name: 'Реактивация холодных лидов',
-    description: 'Попытка вернуть внимание лидов без активности более 30 дней',
-    is_active: false,
-    steps: 7,
-    created_at: '2024-01-05T15:30:00Z',
-    runs_count: 45,
-  },
-  {
-    id: 4,
-    name: 'Опрос после покупки',
-    description: 'Автоматический опрос клиентов через 3 дня после покупки',
-    is_active: true,
-    steps: 4,
-    created_at: '2024-01-18T12:00:00Z',
-    last_run: '2024-01-20T16:45:00Z',
-    runs_count: 56,
-  },
-];

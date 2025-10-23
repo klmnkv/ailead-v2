@@ -5,7 +5,7 @@ import { Op } from 'sequelize';
 const router = express.Router();
 
 // GET /api/stats/today - Статистика за сегодня
-router.get('/today', async (req, res) => {
+router.get('/today', async (_req, res) => {
   try {
     const today = new Date();
     today.setHours(0, 0, 0, 0);

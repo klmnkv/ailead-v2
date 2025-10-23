@@ -6,7 +6,7 @@ const router = express.Router();
 const BOT_CONFIG_KEY = 'bot:config';
 
 // GET /api/bot/config - Получить настройки бота
-router.get('/config', async (req, res) => {
+router.get('/config', async (_req, res) => {
   try {
     const config = await redisClient.get(BOT_CONFIG_KEY);
 
@@ -19,10 +19,10 @@ router.get('/config', async (req, res) => {
       });
     }
 
-    res.json(JSON.parse(config));
+    return res.json(JSON.parse(config));
   } catch (error) {
     console.error('Error fetching bot config:', error);
-    res.status(500).json({ error: 'Failed to fetch bot config' });
+    return res.status(500).json({ error: 'Failed to fetch bot config' });
   }
 });
 
@@ -71,10 +71,10 @@ router.post('/test', async (req, res) => {
       });
     }
 
-    res.json({ success: true });
+    return res.json({ success: true });
   } catch (error) {
     console.error('Error testing bot prompt:', error);
-    res.status(500).json({ error: 'Failed to test bot prompt' });
+    return res.status(500).json({ error: 'Failed to test bot prompt' });
   }
 });
 

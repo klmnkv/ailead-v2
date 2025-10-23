@@ -90,6 +90,30 @@ export interface BotConfig {
   updated_at?: string;
 }
 
+export interface Scenario {
+  id: number;
+  name: string;
+  description: string;
+  is_active: boolean;
+  steps: number;
+  trigger_type?: string;
+  trigger_conditions?: any;
+  actions?: any;
+  created_at: string;
+  updated_at?: string;
+  last_run?: string;
+  runs_count: number;
+}
+
+export interface AnalyticsData {
+  total_messages: number;
+  success_rate: number;
+  avg_time: number;
+  active_leads: number;
+  daily_stats?: any[];
+  period: string;
+}
+
 // ============================================
 // API МЕТОДЫ
 // ============================================
@@ -146,15 +170,47 @@ export const api = {
     return response.data;
   },
 
-  // Аналитика (заглушка)
-  getAnalytics: async () => {
-    const response = await apiClient.get('/api/analytics');
+  // Аналитика
+  getAnalytics: async (period: '7d' | '30d' | '90d' = '30d'): Promise<AnalyticsData> => {
+    const response = await apiClient.get('/api/analytics', {
+      params: { period }
+    });
     return response.data;
   },
 
-  // Сценарии (заглушка)
-  getScenarios: async () => {
+  // Сценарии
+  getScenarios: async (): Promise<Scenario[]> => {
     const response = await apiClient.get('/api/scenarios');
+    return response.data;
+  },
+
+  getScenario: async (id: number): Promise<Scenario> => {
+    const response = await apiClient.get(`/api/scenarios/${id}`);
+    return response.data;
+  },
+
+  createScenario: async (data: Partial<Scenario>): Promise<Scenario> => {
+    const response = await apiClient.post('/api/scenarios', data);
+    return response.data;
+  },
+
+  updateScenario: async (id: number, data: Partial<Scenario>): Promise<Scenario> => {
+    const response = await apiClient.put(`/api/scenarios/${id}`, data);
+    return response.data;
+  },
+
+  deleteScenario: async (id: number): Promise<{ success: boolean }> => {
+    const response = await apiClient.delete(`/api/scenarios/${id}`);
+    return response.data;
+  },
+
+  duplicateScenario: async (id: number): Promise<Scenario> => {
+    const response = await apiClient.post(`/api/scenarios/${id}/duplicate`);
+    return response.data;
+  },
+
+  toggleScenario: async (id: number): Promise<Scenario> => {
+    const response = await apiClient.post(`/api/scenarios/${id}/toggle`);
     return response.data;
   },
 };

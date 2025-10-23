@@ -1,6 +1,7 @@
 import { Account } from './Account.js';
 import { Integration } from './Integration.js';
 import { Message } from './Message.js';
+import { Scenario } from './Scenario.js';
 
 // Связи
 Account.hasMany(Integration, {
@@ -33,4 +34,4 @@ Message.belongsTo(Integration, {
   as: 'integration'
 });
 
-export { Account, Integration, Message };
+export { Account, Integration, Message, Scenario };

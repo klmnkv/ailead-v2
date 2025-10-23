@@ -15,18 +15,10 @@ import {
 export default function AnalyticsPage() {
   const [period, setPeriod] = useState<'7d' | '30d' | '90d'>('30d');
 
-  // TODO: Заменить на реальный API
+  // Загрузка аналитики
   const { data, isLoading } = useQuery({
     queryKey: ['analytics', period],
-    queryFn: async () => {
-      // Временная заглушка
-      return {
-        total_messages: 12456,
-        success_rate: 94.3,
-        avg_time: 3.2,
-        active_leads: 1234,
-      };
-    },
+    queryFn: () => api.getAnalytics(period),
   });
 
   if (isLoading) {

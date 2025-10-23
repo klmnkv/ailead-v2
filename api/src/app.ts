@@ -15,6 +15,8 @@ import analyticsRouter from './routes/analytics.routes.js';
 import integrationsRouter from './routes/integrations.routes.js';
 import webhookRouter from './routes/webhook.routes.js';
 import iframeRouter from './routes/iframe.routes.js';
+import botRouter from './routes/bot.js';
+import statsRouter from './routes/stats.js';
 
 const app = express();
 const httpServer = createServer(app);
@@ -101,7 +103,9 @@ app.use('/api/scenarios', scenariosRouter);
 app.use('/api/analytics', analyticsRouter);
 app.use('/api/integrations', integrationsRouter);
 app.use('/api/webhook', webhookRouter);
-app.use('/iframe', iframeRouter);  // ← ДОБАВЬТЕ (без /api!)
+app.use('/iframe', iframeRouter);
+app.use('/api/bot', botRouter);
+app.use('/api/stats', statsRouter);
 
 // WebSocket setup
 setupWebSocket(io);
