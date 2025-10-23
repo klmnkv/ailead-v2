@@ -547,7 +547,7 @@ router.get('/amocrm/callback', async (req, res) => {
 
 /**
  * Получить воронки и этапы из amoCRM
- * GET /api/integrations/amocrm/pipelines?account_id=123
+ * GET /api/integrations/amocrm/pipelines?account_id=32181490
  */
 router.get('/amocrm/pipelines', async (req, res) => {
     try {
@@ -557,9 +557,9 @@ router.get('/amocrm/pipelines', async (req, res) => {
             return res.status(400).json({ error: 'account_id is required' });
         }
 
-        // Находим интеграцию для данного аккаунта
+        // Находим интеграцию для данного amoCRM аккаунта
         const integration = await Integration.findOne({
-            where: { account_id: parseInt(account_id as string) }
+            where: { amocrm_account_id: parseInt(account_id as string) }
         });
 
         if (!integration) {
