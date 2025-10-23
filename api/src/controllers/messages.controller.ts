@@ -4,6 +4,8 @@ import { Integration } from '../models/Integration.js';
 import { Message } from '../models/Message.js';
 import { AppError } from '../middleware/errorHandler.js';
 import { logger } from '../utils/logger.js';
+import { aiService } from '../services/ai.service.js';
+import { redisClient } from '../config/redis.js';
 
 export const sendMessage = async (
   req: Request,
@@ -130,6 +132,139 @@ export const getMessageHistory = async (
     });
 
   } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Обрабатывает входящее сообщение и генерирует AI ответ
+ */
+export const processIncomingMessage = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { account_id, lead_id, message_text } = req.body;
+
+    if (!account_id || !lead_id || !message_text) {
+      throw new AppError(400, 'Missing required fields: account_id, lead_id, message_text');
+    }
+
+    logger.info(`📩 Processing incoming message from lead ${lead_id}`);
+
+    // Получаем конфигурацию бота
+    const configStr = await redisClient.get('bot:config');
+    const config = configStr ? JSON.parse(configStr) : null;
+
+    if (!config || !config.ai || !config.ai.enabled) {
+      throw new AppError(400, 'AI integration is not enabled');
+    }
+
+    // Инициализируем AI сервис если еще не инициализирован
+    if (config.ai.api_key) {
+      aiService.initializeOpenAI(config.ai.api_key);
+    }
+
+    // Получаем историю сообщений для контекста
+    const historyMessages = await Message.findAll({
+      where: {
+        account_id: parseInt(account_id as string),
+        lead_id: parseInt(lead_id as string)
+      },
+      order: [['created_at', 'ASC']],
+      limit: 10 // Последние 10 сообщений для контекста
+    });
+
+    // Формируем историю переписки для AI
+    const conversationHistory = historyMessages.map(msg => ({
+      role: msg.direction === 'incoming' ? 'user' as const : 'assistant' as const,
+      content: msg.message_text
+    }));
+
+    // Генерируем ответ через AI
+    logger.info(`🤖 Generating AI response for lead ${lead_id}`);
+    const aiResponse = await aiService.generateResponse(config.ai, {
+      systemPrompt: config.prompt || 'Ты - профессиональный менеджер по продажам.',
+      userMessage: message_text,
+      conversationHistory
+    });
+
+    logger.info(`✅ AI response generated: ${aiResponse.substring(0, 100)}...`);
+
+    // Сохраняем входящее сообщение
+    const incomingMessage = await Message.create({
+      account_id: parseInt(account_id as string),
+      lead_id: parseInt(lead_id as string),
+      message_text,
+      message_type: 'chat',
+      direction: 'incoming',
+      status: 'received'
+    });
+
+    // Сохраняем AI ответ как исходящее сообщение
+    const integration = await Integration.findOne({
+      where: { amocrm_account_id: account_id, status: 'active' }
+    });
+
+    if (!integration) {
+      throw new AppError(404, `No active integration found for amoCRM account ${account_id}`);
+    }
+
+    const outgoingMessage = await Message.create({
+      account_id: integration.account_id,
+      integration_id: integration.id,
+      lead_id: parseInt(lead_id as string),
+      message_text: aiResponse,
+      message_type: 'chat',
+      direction: 'outgoing',
+      status: 'pending'
+    });
+
+    // Добавляем задачу в очередь для отправки через воркер
+    const job = await queueService.addMessageTask(
+      {
+        account_id,
+        lead_id: parseInt(lead_id as string),
+        base_url: integration.base_url,
+        access_token: integration.access_token,
+        refresh_token: integration.refresh_token,
+        message_text: aiResponse,
+        expiry: integration.token_expiry,
+        email: integration.email,
+        password: integration.password
+      },
+      {
+        priority: 5
+      }
+    );
+
+    await outgoingMessage.update({ job_id: job.id?.toString() });
+
+    // Отправляем WebSocket событие
+    const io = req.app.get('io');
+    if (io) {
+      io.emit('message:ai_response', {
+        lead_id,
+        account_id,
+        incoming_message: message_text,
+        ai_response: aiResponse,
+        job_id: job.id
+      });
+    }
+
+    logger.info(`✅ AI response queued for sending: ${job.id}`);
+
+    res.status(200).json({
+      incoming_message_id: incomingMessage.id,
+      outgoing_message_id: outgoingMessage.id,
+      ai_response: aiResponse,
+      job_id: job.id,
+      status: 'queued'
+    });
+
+  } catch (error) {
+    logger.error('Error processing incoming message with AI:', error);
     next(error);
   }
 };
