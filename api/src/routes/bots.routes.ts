@@ -1,7 +1,36 @@
 import { Router } from 'express';
 import { Bot } from '../models/index.js';
+import { Account } from '../models/Account.js';
+import { logger } from '../utils/logger.js';
 
 const router = Router();
+
+// Вспомогательная функция для создания аккаунта, если его нет
+async function ensureAccountExists(account_id: number): Promise<void> {
+  try {
+    const account = await Account.findByPk(account_id);
+
+    if (!account) {
+      logger.info(`📝 Creating account with id=${account_id}`);
+
+      await Account.create({
+        id: account_id,
+        email: `amocrm_${account_id}@temp.local`,
+        password_hash: 'oauth_only',
+        company_name: `amoCRM Account ${account_id}`,
+        subscription_plan: 'pro',
+        token_balance: 10000
+      });
+
+      logger.info(`✅ Account created successfully: id=${account_id}`);
+    }
+  } catch (error: any) {
+    // Если ошибка дублирования - игнорируем (race condition)
+    if (error.name !== 'SequelizeUniqueConstraintError') {
+      throw error;
+    }
+  }
+}
 
 // GET /api/bots?account_id=123 - Получить всех ботов для аккаунта
 router.get('/', async (req, res) => {
@@ -63,6 +92,9 @@ router.post('/', async (req, res) => {
     if (!account_id || !name || !prompt) {
       return res.status(400).json({ error: 'account_id, name and prompt are required' });
     }
+
+    // Убедимся, что аккаунт существует (создаём, если нет)
+    await ensureAccountExists(parseInt(account_id));
 
     const bot = await Bot.create({
       account_id,
@@ -188,6 +220,9 @@ router.post('/:id/duplicate', async (req, res) => {
     if (!original) {
       return res.status(404).json({ error: 'Bot not found' });
     }
+
+    // Убедимся, что аккаунт существует (создаём, если нет)
+    await ensureAccountExists(original.account_id);
 
     const duplicate = await Bot.create({
       account_id: original.account_id,
