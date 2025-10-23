@@ -634,4 +634,60 @@ router.get('/amocrm/pipelines', async (req, res) => {
     }
 });
 
+/**
+ * ВРЕМЕННЫЙ endpoint для обновления токенов вручную
+ * POST /api/integrations/amocrm/update-token
+ *
+ * Body: {
+ *   account_id: number,
+ *   access_token: string,
+ *   token_expiry: number
+ * }
+ */
+router.post('/amocrm/update-token', async (req, res) => {
+    try {
+        const { account_id, access_token, token_expiry } = req.body;
+
+        if (!account_id || !access_token || !token_expiry) {
+            return res.status(400).json({
+                error: 'account_id, access_token и token_expiry обязательны'
+            });
+        }
+
+        // Находим интеграцию
+        const integration = await Integration.findOne({
+            where: { amocrm_account_id: account_id }
+        });
+
+        if (!integration) {
+            return res.status(404).json({ error: 'Интеграция не найдена' });
+        }
+
+        // Обновляем токены
+        await integration.update({
+            access_token: access_token,
+            refresh_token: access_token, // Для долгосрочных токенов
+            token_expiry: token_expiry,
+            status: 'active'
+        });
+
+        logger.info('✅ Токены успешно обновлены', {
+            account_id,
+            expires_at: new Date(token_expiry * 1000).toISOString()
+        });
+
+        return res.json({
+            success: true,
+            message: 'Токены обновлены',
+            expires_at: new Date(token_expiry * 1000).toISOString()
+        });
+    } catch (error: any) {
+        logger.error('❌ Ошибка обновления токенов:', error);
+        return res.status(500).json({
+            error: 'Не удалось обновить токены',
+            details: error.message
+        });
+    }
+});
+
 export default router;
