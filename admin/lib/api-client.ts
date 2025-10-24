@@ -90,6 +90,54 @@ export interface BotConfig {
   updated_at?: string;
 }
 
+// 👇 ТИПЫ ДЛЯ COMPANY ADMIN
+export interface IntegrationWithStats {
+  id: number;
+  account_id: number;
+  amocrm_account_id: number;
+  domain: string;
+  base_url: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+  message_count: number;
+  error_count: number;
+  account?: {
+    id: number;
+    email: string;
+    company_name: string;
+  };
+}
+
+export interface IntegrationDetails {
+  integration: {
+    id: number;
+    account_id: number;
+    amocrm_account_id: number;
+    domain: string;
+    base_url: string;
+    status: string;
+    created_at: string;
+    updated_at: string;
+    account?: any;
+  };
+  stats: {
+    total_messages: number;
+    completed: number;
+    failed: number;
+    pending: number;
+  };
+}
+
+export interface IntegrationBotConfig {
+  bot_enabled: boolean;
+  gpt_model: string;
+  temperature: number;
+  max_tokens: number;
+  system_prompt: string;
+  updated_at?: Date;
+}
+
 // ============================================
 // API МЕТОДЫ
 // ============================================
@@ -156,5 +204,55 @@ export const api = {
   getScenarios: async () => {
     const response = await apiClient.get('/api/scenarios');
     return response.data;
+  },
+
+  // ============================================
+  // COMPANY ADMIN МЕТОДЫ
+  // ============================================
+
+  // Получить все интеграции
+  companyAdmin: {
+    getAllIntegrations: async (params?: {
+      search?: string;
+      status?: string;
+    }): Promise<{ integrations: IntegrationWithStats[] }> => {
+      const response = await apiClient.get('/api/company-admin/integrations', { params });
+      return response.data;
+    },
+
+    getIntegrationDetails: async (id: number): Promise<IntegrationDetails> => {
+      const response = await apiClient.get(`/api/company-admin/integrations/${id}`);
+      return response.data;
+    },
+
+    getIntegrationMessages: async (
+      id: number,
+      page = 1,
+      limit = 20,
+      status?: string
+    ): Promise<MessageHistoryResponse> => {
+      const response = await apiClient.get(`/api/company-admin/integrations/${id}/messages`, {
+        params: { page, limit, status },
+      });
+      return response.data;
+    },
+
+    getIntegrationErrors: async (id: number): Promise<{ errors: Message[] }> => {
+      const response = await apiClient.get(`/api/company-admin/integrations/${id}/errors`);
+      return response.data;
+    },
+
+    getBotConfig: async (id: number): Promise<IntegrationBotConfig> => {
+      const response = await apiClient.get(`/api/company-admin/integrations/${id}/bot-config`);
+      return response.data;
+    },
+
+    updateBotConfig: async (
+      id: number,
+      config: Partial<IntegrationBotConfig>
+    ): Promise<{ success: boolean; message: string }> => {
+      const response = await apiClient.put(`/api/company-admin/integrations/${id}/bot-config`, config);
+      return response.data;
+    },
   },
 };
