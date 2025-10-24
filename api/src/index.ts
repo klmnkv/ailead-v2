@@ -15,6 +15,10 @@ async function start() {
     await sequelize.authenticate();
     logger.info('✅ Database connected');
 
+    // Синхронизация моделей (создание таблиц, если их нет)
+    await sequelize.sync({ alter: true });
+    logger.info('✅ Database models synced');
+
     // Подключение к Redis
     await connectRedis();
     logger.info('✅ Redis connected');
