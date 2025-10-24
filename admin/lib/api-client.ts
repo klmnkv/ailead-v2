@@ -122,6 +122,33 @@ export interface Pipeline {
   stages: Stage[];
 }
 
+export interface KnowledgeBaseItem {
+  id: number;
+  account_id: number;
+  title: string;
+  content: string;
+  category?: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateKnowledgeBaseItem {
+  account_id: number;
+  title: string;
+  content: string;
+  category?: string;
+  is_active?: boolean;
+}
+
+export interface UpdateKnowledgeBaseItem {
+  account_id: number;
+  title?: string;
+  content?: string;
+  category?: string;
+  is_active?: boolean;
+}
+
 // ============================================
 // API МЕТОДЫ
 // ============================================
@@ -238,6 +265,46 @@ export const api = {
   // Получить воронки из amoCRM
   getPipelines: async (accountId: number): Promise<Pipeline[]> => {
     const response = await apiClient.get('/api/integrations/pipelines', {
+      params: { account_id: accountId },
+    });
+    return response.data;
+  },
+
+  // ============================================
+  // БАЗА ЗНАНИЙ - Knowledge Base
+  // ============================================
+
+  // Получить все записи базы знаний
+  getKnowledgeBase: async (accountId: number): Promise<KnowledgeBaseItem[]> => {
+    const response = await apiClient.get('/api/knowledge', {
+      params: { account_id: accountId },
+    });
+    return response.data;
+  },
+
+  // Получить одну запись
+  getKnowledgeBaseItem: async (id: number, accountId: number): Promise<KnowledgeBaseItem> => {
+    const response = await apiClient.get(`/api/knowledge/${id}`, {
+      params: { account_id: accountId },
+    });
+    return response.data;
+  },
+
+  // Создать запись
+  createKnowledgeBaseItem: async (data: CreateKnowledgeBaseItem): Promise<KnowledgeBaseItem> => {
+    const response = await apiClient.post('/api/knowledge', data);
+    return response.data;
+  },
+
+  // Обновить запись
+  updateKnowledgeBaseItem: async (id: number, data: UpdateKnowledgeBaseItem): Promise<KnowledgeBaseItem> => {
+    const response = await apiClient.put(`/api/knowledge/${id}`, data);
+    return response.data;
+  },
+
+  // Удалить запись
+  deleteKnowledgeBaseItem: async (id: number, accountId: number): Promise<{ success: boolean }> => {
+    const response = await apiClient.delete(`/api/knowledge/${id}`, {
       params: { account_id: accountId },
     });
     return response.data;
