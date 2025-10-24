@@ -18,6 +18,7 @@ import iframeRouter from './routes/iframe.routes.js';
 import botRouter from './routes/bot.js';
 import statsRouter from './routes/stats.js';
 import botsRouter from './routes/bots.routes.js';
+import adminRouter from './routes/admin.routes.js';
 
 const app = express();
 const httpServer = createServer(app);
@@ -108,6 +109,7 @@ app.use('/iframe', iframeRouter);
 app.use('/api/bot', botRouter);
 app.use('/api/stats', statsRouter);
 app.use('/api/bots', botsRouter);
+app.use('/api/admin', adminRouter);
 
 // WebSocket setup
 setupWebSocket(io);
