@@ -30,31 +30,27 @@ const io = new Server(httpServer, {
 
 // Middleware
 app.use(helmet({
-  contentSecurityPolicy: false,  // ← Должно быть false
-  frameguard: false  // ← ДОБАВЬТЕ эту строку
+  contentSecurityPolicy: false,
+  frameguard: false
 }));
-// ✅ ИСПРАВЛЕННЫЙ CORS
+
 app.use(cors({
   origin: function(origin, callback) {
-    // Логируем все запросы для отладки
     logger.info('CORS check', { origin });
 
-    // Разрешённые origins
     const allowedOrigins = [
       process.env.VITE_API_URL || 'http://localhost:3000',
       'http://localhost:4000',
       'https://voiceleadai.ru',
-      /^https:\/\/.*\.amocrm\.ru$/,   // ← Регулярное выражение для *.amocrm.ru
-      /^https:\/\/.*\.amocrm\.com$/   // ← Регулярное выражение для *.amocrm.com
+      /^https:\/\/.*\.amocrm\.ru$/,
+      /^https:\/\/.*\.amocrm\.com$/
     ];
 
-    // Если origin не указан (например, Postman, curl) - разрешаем
     if (!origin) {
       callback(null, true);
       return;
     }
 
-    // Проверяем, разрешён ли origin
     const isAllowed = allowedOrigins.some(allowed => {
       if (typeof allowed === 'string') {
         return allowed === origin;
@@ -102,7 +98,7 @@ app.use('/api/scenarios', scenariosRouter);
 app.use('/api/analytics', analyticsRouter);
 app.use('/api/integrations', integrationsRouter);
 app.use('/api/webhook', webhookRouter);
-app.use('/iframe', iframeRouter);  // ← ДОБАВЬТЕ (без /api!)
+app.use('/iframe', iframeRouter);
 app.use('/api/admin', adminRouter);
 
 // WebSocket setup
