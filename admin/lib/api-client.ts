@@ -90,6 +90,38 @@ export interface BotConfig {
   updated_at?: string;
 }
 
+export interface Bot {
+  id: number;
+  account_id: number;
+  name: string;
+  description?: string;
+  prompt: string;
+  ai_provider?: string;
+  api_key?: string;
+  model: string;
+  temperature: number;
+  max_tokens: number;
+  pipeline_id?: number;
+  stage_id?: number;
+  deactivation_conditions?: string;
+  deactivation_message?: string;
+  is_active: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface Stage {
+  id: number;
+  name: string;
+  color?: string;
+}
+
+export interface Pipeline {
+  id: number;
+  name: string;
+  stages: Stage[];
+}
+
 // ============================================
 // API МЕТОДЫ
 // ============================================
@@ -155,6 +187,59 @@ export const api = {
   // Сценарии (заглушка)
   getScenarios: async () => {
     const response = await apiClient.get('/api/scenarios');
+    return response.data;
+  },
+
+  // ============================================
+  // БОТЫ - Bot Management
+  // ============================================
+
+  // Получить список ботов
+  getBots: async (accountId: number): Promise<Bot[]> => {
+    const response = await apiClient.get('/api/bots', {
+      params: { account_id: accountId },
+    });
+    return response.data;
+  },
+
+  // Создать бота
+  createBot: async (data: Partial<Bot>): Promise<Bot> => {
+    const response = await apiClient.post('/api/bots', data);
+    return response.data;
+  },
+
+  // Обновить бота
+  updateBot: async (id: number, data: Partial<Bot>): Promise<Bot> => {
+    const response = await apiClient.put(`/api/bots/${id}`, data);
+    return response.data;
+  },
+
+  // Удалить бота
+  deleteBot: async (id: number): Promise<void> => {
+    await apiClient.delete(`/api/bots/${id}`);
+  },
+
+  // Переключить статус бота (активен/неактивен)
+  toggleBot: async (id: number): Promise<Bot> => {
+    const response = await apiClient.patch(`/api/bots/${id}/toggle`);
+    return response.data;
+  },
+
+  // Дублировать бота
+  duplicateBot: async (id: number): Promise<Bot> => {
+    const response = await apiClient.post(`/api/bots/${id}/duplicate`);
+    return response.data;
+  },
+
+  // ============================================
+  // ВОРОНКИ - Pipelines
+  // ============================================
+
+  // Получить воронки из amoCRM
+  getPipelines: async (accountId: number): Promise<Pipeline[]> => {
+    const response = await apiClient.get('/api/integrations/pipelines', {
+      params: { account_id: accountId },
+    });
     return response.data;
   },
 };
