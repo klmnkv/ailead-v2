@@ -522,11 +522,11 @@ router.get('/pipelines', async (req, res) => {
             return res.status(400).json({ error: 'account_id is required' });
         }
 
-        logger.info('📥 Fetching pipelines for account', { account_id });
+        logger.info('📥 Fetching pipelines for amoCRM account', { amocrm_account_id: account_id });
 
-        // Находим интеграцию для этого аккаунта
+        // ВАЖНО: account_id это ID аккаунта amoCRM, ищем по amocrm_account_id
         const integration = await Integration.findOne({
-            where: { account_id: Number(account_id) }
+            where: { amocrm_account_id: Number(account_id) }
         });
 
         if (!integration) {
