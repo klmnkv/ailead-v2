@@ -21,13 +21,9 @@ function cn(...classes: (string | undefined | null | false)[]) {
 }
 
 const navigation = [
-  { name: 'Dashboard', href: '/', icon: LayoutDashboard },
   { name: 'Боты', href: '/bots', icon: Bot },
-  { name: 'Отправить', href: '/send', icon: Send },
-  { name: 'История', href: '/history', icon: History },
-  { name: 'Аналитика', href: '/analytics', icon: BarChart3 },
   { name: 'Сценарии', href: '/scenarios', icon: Workflow },
-  { name: 'Настройки', href: '/settings', icon: Settings },
+  { name: 'Аналитика', href: '/analytics', icon: BarChart3 },
 ];
 
 export function Navigation() {
