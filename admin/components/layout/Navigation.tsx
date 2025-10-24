@@ -11,7 +11,8 @@ import {
   Settings,
   Activity,
   Menu,
-  X
+  X,
+  BookOpen
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -25,6 +26,7 @@ const navigation = [
   { name: 'История', href: '/history', icon: History },
   { name: 'Аналитика', href: '/analytics', icon: BarChart3 },
   { name: 'Сценарии', href: '/scenarios', icon: Workflow },
+  { name: 'База знаний', href: '/knowledge', icon: BookOpen },
   { name: 'Настройки', href: '/settings', icon: Settings },
 ];
 

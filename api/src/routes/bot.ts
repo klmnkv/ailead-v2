@@ -16,6 +16,7 @@ router.get('/config', async (req, res) => {
         auto_process: false,
         prompt:
           'Ты - профессиональный менеджер по продажам. Твоя задача - помочь клиенту с выбором товара, ответить на вопросы и довести до покупки. Веди себя дружелюбно, но профессионально.',
+        knowledge_base_ids: []
       });
     }
 
@@ -29,11 +30,12 @@ router.get('/config', async (req, res) => {
 // PUT /api/bot/config - Сохранить настройки бота
 router.put('/config', async (req, res) => {
   try {
-    const { auto_process, prompt } = req.body;
+    const { auto_process, prompt, knowledge_base_ids } = req.body;
 
     const config = {
       auto_process: auto_process || false,
       prompt: prompt || '',
+      knowledge_base_ids: knowledge_base_ids || [],
       updated_at: new Date().toISOString(),
     };
 

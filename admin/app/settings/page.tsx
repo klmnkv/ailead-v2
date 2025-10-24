@@ -174,6 +174,11 @@ function BotTab() {
     queryFn: api.getBotConfig,
   });
 
+  const { data: knowledgeItems = [] } = useQuery({
+    queryKey: ['knowledge'],
+    queryFn: api.getKnowledgeBase,
+  });
+
   const saveMutation = useMutation({
     mutationFn: api.saveBotConfig,
     onSuccess: () => {
@@ -189,6 +194,7 @@ function BotTab() {
   const [formData, setFormData] = useState({
     auto_process: config?.auto_process || false,
     prompt: config?.prompt || '',
+    knowledge_base_ids: config?.knowledge_base_ids || [],
   });
 
   const handleSave = () => {
@@ -242,6 +248,64 @@ function BotTab() {
         />
         <p className="text-xs text-gray-500 mt-2">
           Опишите, как должен вести себя бот при общении с клиентами
+        </p>
+      </div>
+
+      {/* База знаний */}
+      <div>
+        <label className="block font-medium text-gray-900 mb-2">
+          База знаний
+        </label>
+        <p className="text-sm text-gray-600 mb-4">
+          Выберите записи из базы знаний, которые бот будет использовать при ответах
+        </p>
+
+        {knowledgeItems.length === 0 ? (
+          <div className="border border-gray-200 rounded-lg p-4 text-center">
+            <p className="text-gray-500 mb-3">База знаний пуста</p>
+            <a
+              href="/knowledge"
+              className="inline-flex items-center px-4 py-2 text-sm bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition"
+            >
+              Добавить записи
+            </a>
+          </div>
+        ) : (
+          <div className="border border-gray-200 rounded-lg divide-y divide-gray-200 max-h-80 overflow-y-auto">
+            {knowledgeItems.filter(item => item.is_active).map(item => (
+              <label
+                key={item.id}
+                className="flex items-start p-4 hover:bg-gray-50 cursor-pointer transition"
+              >
+                <input
+                  type="checkbox"
+                  checked={formData.knowledge_base_ids?.includes(item.id)}
+                  onChange={(e) => {
+                    const newIds = e.target.checked
+                      ? [...(formData.knowledge_base_ids || []), item.id]
+                      : (formData.knowledge_base_ids || []).filter(id => id !== item.id);
+                    setFormData({ ...formData, knowledge_base_ids: newIds });
+                  }}
+                  className="mt-1 w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                />
+                <div className="ml-3 flex-1">
+                  <div className="font-medium text-gray-900">{item.title}</div>
+                  {item.category && (
+                    <span className="inline-block mt-1 px-2 py-0.5 text-xs bg-purple-100 text-purple-700 rounded">
+                      {item.category}
+                    </span>
+                  )}
+                  <p className="text-sm text-gray-600 mt-1 line-clamp-2">
+                    {item.content}
+                  </p>
+                </div>
+              </label>
+            ))}
+          </div>
+        )}
+
+        <p className="text-xs text-gray-500 mt-2">
+          Выбрано: {formData.knowledge_base_ids?.length || 0} из {knowledgeItems.filter(i => i.is_active).length}
         </p>
       </div>
 

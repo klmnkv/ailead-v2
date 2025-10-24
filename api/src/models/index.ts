@@ -1,6 +1,7 @@
 import { Account } from './Account.js';
 import { Integration } from './Integration.js';
 import { Message } from './Message.js';
+import { KnowledgeBase } from './KnowledgeBase.js';
 
 // Связи
 Account.hasMany(Integration, {
@@ -33,4 +34,14 @@ Message.belongsTo(Integration, {
   as: 'integration'
 });
 
-export { Account, Integration, Message };
+Account.hasMany(KnowledgeBase, {
+  foreignKey: 'account_id',
+  as: 'knowledgeBase'
+});
+
+KnowledgeBase.belongsTo(Account, {
+  foreignKey: 'account_id',
+  as: 'account'
+});
+
+export { Account, Integration, Message, KnowledgeBase };

@@ -87,7 +87,33 @@ export interface DailyStats {
 export interface BotConfig {
   auto_process: boolean;
   prompt: string;
+  knowledge_base_ids?: number[];
   updated_at?: string;
+}
+
+export interface KnowledgeBaseItem {
+  id: number;
+  account_id: number;
+  title: string;
+  content: string;
+  category?: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateKnowledgeBaseItem {
+  title: string;
+  content: string;
+  category?: string;
+  is_active?: boolean;
+}
+
+export interface UpdateKnowledgeBaseItem {
+  title?: string;
+  content?: string;
+  category?: string;
+  is_active?: boolean;
 }
 
 // ============================================
@@ -155,6 +181,36 @@ export const api = {
   // Сценарии (заглушка)
   getScenarios: async () => {
     const response = await apiClient.get('/api/scenarios');
+    return response.data;
+  },
+
+  // База знаний - получить все записи
+  getKnowledgeBase: async (): Promise<KnowledgeBaseItem[]> => {
+    const response = await apiClient.get('/api/knowledge');
+    return response.data;
+  },
+
+  // База знаний - получить одну запись
+  getKnowledgeBaseItem: async (id: number): Promise<KnowledgeBaseItem> => {
+    const response = await apiClient.get(`/api/knowledge/${id}`);
+    return response.data;
+  },
+
+  // База знаний - создать запись
+  createKnowledgeBaseItem: async (data: CreateKnowledgeBaseItem): Promise<KnowledgeBaseItem> => {
+    const response = await apiClient.post('/api/knowledge', data);
+    return response.data;
+  },
+
+  // База знаний - обновить запись
+  updateKnowledgeBaseItem: async (id: number, data: UpdateKnowledgeBaseItem): Promise<KnowledgeBaseItem> => {
+    const response = await apiClient.put(`/api/knowledge/${id}`, data);
+    return response.data;
+  },
+
+  // База знаний - удалить запись
+  deleteKnowledgeBaseItem: async (id: number): Promise<{ success: boolean }> => {
+    const response = await apiClient.delete(`/api/knowledge/${id}`);
     return response.data;
   },
 };
