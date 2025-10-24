@@ -2,6 +2,8 @@ import { Account } from './Account.js';
 import { Integration } from './Integration.js';
 import { Message } from './Message.js';
 import { Bot } from './Bot.js';
+import { KnowledgeBase } from './KnowledgeBase.js';
+import { BotKnowledge } from './BotKnowledge.js';
 
 // Связи
 Account.hasMany(Integration, {
@@ -45,4 +47,30 @@ Bot.belongsTo(Account, {
   as: 'account'
 });
 
-export { Account, Integration, Message, Bot };
+// KnowledgeBase связи
+Account.hasMany(KnowledgeBase, {
+  foreignKey: 'account_id',
+  as: 'knowledge_base'
+});
+
+KnowledgeBase.belongsTo(Account, {
+  foreignKey: 'account_id',
+  as: 'account'
+});
+
+// Bot и KnowledgeBase связь многие-ко-многим через BotKnowledge
+Bot.belongsToMany(KnowledgeBase, {
+  through: BotKnowledge,
+  foreignKey: 'bot_id',
+  otherKey: 'knowledge_id',
+  as: 'knowledge'
+});
+
+KnowledgeBase.belongsToMany(Bot, {
+  through: BotKnowledge,
+  foreignKey: 'knowledge_id',
+  otherKey: 'bot_id',
+  as: 'bots'
+});
+
+export { Account, Integration, Message, Bot, KnowledgeBase, BotKnowledge };

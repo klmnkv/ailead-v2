@@ -13,7 +13,8 @@ import {
   Upload,
   X,
   Send,
-  Loader2
+  Loader2,
+  BookOpen
 } from 'lucide-react';
 import { api, Bot } from '@/lib/api-client';
 
@@ -39,6 +40,19 @@ export default function BotsPage() {
     queryKey: ['pipelines', accountId],
     queryFn: () => api.getPipelines(accountId),
     retry: false,
+  });
+
+  // Fetch knowledge base
+  const { data: knowledgeList = [] } = useQuery({
+    queryKey: ['knowledge', accountId],
+    queryFn: () => api.getKnowledge(accountId),
+  });
+
+  // Fetch bot knowledge (связь бота с базой знаний)
+  const { data: botKnowledge = [] } = useQuery({
+    queryKey: ['botKnowledge', selectedBot?.id],
+    queryFn: () => selectedBot ? api.getBotKnowledge(selectedBot.id) : Promise.resolve([]),
+    enabled: !!selectedBot,
   });
 
   // Select first bot if none selected
@@ -111,6 +125,24 @@ export default function BotsPage() {
     mutationFn: (id: number) => api.duplicateBot(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['bots', accountId] });
+    },
+  });
+
+  // Attach knowledge mutation
+  const attachKnowledgeMutation = useMutation({
+    mutationFn: ({ botId, knowledgeId }: { botId: number; knowledgeId: number }) =>
+      api.attachKnowledgeToBot(botId, knowledgeId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['botKnowledge', selectedBot?.id] });
+    },
+  });
+
+  // Detach knowledge mutation
+  const detachKnowledgeMutation = useMutation({
+    mutationFn: ({ botId, knowledgeId }: { botId: number; knowledgeId: number }) =>
+      api.detachKnowledgeFromBot(botId, knowledgeId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['botKnowledge', selectedBot?.id] });
     },
   });
 
@@ -388,6 +420,85 @@ export default function BotsPage() {
                     rows={6}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-sm"
                   />
+                </div>
+              </div>
+
+              {/* База знаний */}
+              <div className="bg-white rounded-lg shadow">
+                <div className="px-6 py-4 border-b border-gray-200 flex items-center gap-2">
+                  <BookOpen className="w-5 h-5 text-purple-600" />
+                  <h3 className="font-semibold text-gray-900">База знаний</h3>
+                  <HelpCircle className="w-4 h-4 text-gray-400 cursor-help" title="Выберите информацию, которую бот будет использовать" />
+                </div>
+                <div className="p-6">
+                  <p className="text-sm text-gray-600 mb-4">
+                    Выберите записи из базы знаний, которые бот будет использовать для ответов
+                  </p>
+                  {knowledgeList.length === 0 ? (
+                    <div className="bg-gray-50 rounded-lg p-6 text-center">
+                      <BookOpen className="w-12 h-12 mx-auto mb-3 text-gray-400" />
+                      <p className="text-gray-600 mb-3">База знаний пуста</p>
+                      <a
+                        href={`/knowledge?account_id=${accountId}`}
+                        className="inline-flex items-center space-x-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition"
+                      >
+                        <Plus className="w-4 h-4" />
+                        <span>Создать записи</span>
+                      </a>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      <div className="max-h-60 overflow-y-auto space-y-2 border border-gray-200 rounded-lg p-3">
+                        {knowledgeList.map((knowledge) => {
+                          const isAttached = botKnowledge.some(bk => bk.knowledge_id === knowledge.id);
+                          return (
+                            <div
+                              key={knowledge.id}
+                              className={`flex items-center justify-between p-3 rounded-lg transition ${
+                                isAttached ? 'bg-purple-50 border-2 border-purple-200' : 'bg-gray-50 hover:bg-gray-100 border-2 border-transparent'
+                              }`}
+                            >
+                              <div className="flex-1">
+                                <div className="font-medium text-gray-900">{knowledge.title}</div>
+                                {knowledge.category && (
+                                  <div className="text-xs text-gray-500 mt-1">
+                                    Категория: {knowledge.category}
+                                  </div>
+                                )}
+                              </div>
+                              <button
+                                onClick={() => {
+                                  if (!selectedBot) return;
+                                  if (isAttached) {
+                                    detachKnowledgeMutation.mutate({
+                                      botId: selectedBot.id,
+                                      knowledgeId: knowledge.id,
+                                    });
+                                  } else {
+                                    attachKnowledgeMutation.mutate({
+                                      botId: selectedBot.id,
+                                      knowledgeId: knowledge.id,
+                                    });
+                                  }
+                                }}
+                                disabled={attachKnowledgeMutation.isPending || detachKnowledgeMutation.isPending}
+                                className={`px-4 py-2 rounded-lg transition disabled:opacity-50 ${
+                                  isAttached
+                                    ? 'bg-red-100 text-red-700 hover:bg-red-200'
+                                    : 'bg-purple-600 text-white hover:bg-purple-700'
+                                }`}
+                              >
+                                {isAttached ? 'Отвязать' : 'Привязать'}
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        Привязано записей: {botKnowledge.length}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
 

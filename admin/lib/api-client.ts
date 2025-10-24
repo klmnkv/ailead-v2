@@ -122,6 +122,26 @@ export interface Pipeline {
   stages: Stage[];
 }
 
+export interface KnowledgeBase {
+  id: number;
+  account_id: number;
+  title: string;
+  content: string;
+  category?: string;
+  tags?: string;
+  is_active: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface BotKnowledge {
+  id: number;
+  bot_id: number;
+  knowledge_id: number;
+  priority: number;
+  created_at?: string;
+}
+
 // ============================================
 // API МЕТОДЫ
 // ============================================
@@ -241,5 +261,60 @@ export const api = {
       params: { account_id: accountId },
     });
     return response.data;
+  },
+
+  // ============================================
+  // БАЗА ЗНАНИЙ - Knowledge Base
+  // ============================================
+
+  // Получить список записей базы знаний
+  getKnowledge: async (accountId: number, category?: string, search?: string): Promise<KnowledgeBase[]> => {
+    const response = await apiClient.get('/api/knowledge', {
+      params: { account_id: accountId, category, search },
+    });
+    return response.data;
+  },
+
+  // Получить одну запись
+  getKnowledgeById: async (id: number): Promise<KnowledgeBase> => {
+    const response = await apiClient.get(`/api/knowledge/${id}`);
+    return response.data;
+  },
+
+  // Создать запись
+  createKnowledge: async (data: Partial<KnowledgeBase>): Promise<KnowledgeBase> => {
+    const response = await apiClient.post('/api/knowledge', data);
+    return response.data;
+  },
+
+  // Обновить запись
+  updateKnowledge: async (id: number, data: Partial<KnowledgeBase>): Promise<KnowledgeBase> => {
+    const response = await apiClient.put(`/api/knowledge/${id}`, data);
+    return response.data;
+  },
+
+  // Удалить запись
+  deleteKnowledge: async (id: number): Promise<void> => {
+    await apiClient.delete(`/api/knowledge/${id}`);
+  },
+
+  // Получить базу знаний для конкретного бота
+  getBotKnowledge: async (botId: number): Promise<BotKnowledge[]> => {
+    const response = await apiClient.get(`/api/knowledge/bot/${botId}`);
+    return response.data;
+  },
+
+  // Привязать базу знаний к боту
+  attachKnowledgeToBot: async (botId: number, knowledgeId: number, priority = 0): Promise<BotKnowledge> => {
+    const response = await apiClient.post(`/api/knowledge/bot/${botId}/attach`, {
+      knowledge_id: knowledgeId,
+      priority,
+    });
+    return response.data;
+  },
+
+  // Отвязать базу знаний от бота
+  detachKnowledgeFromBot: async (botId: number, knowledgeId: number): Promise<void> => {
+    await apiClient.delete(`/api/knowledge/bot/${botId}/detach/${knowledgeId}`);
   },
 };
