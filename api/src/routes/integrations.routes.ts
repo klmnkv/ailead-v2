@@ -510,4 +510,93 @@ router.get('/amocrm/callback', async (req, res) => {
     }
 });
 
+/**
+ * Получить воронки и этапы из amoCRM
+ * GET /api/integrations/pipelines?account_id=XXX
+ */
+router.get('/pipelines', async (req, res) => {
+    try {
+        const { account_id } = req.query;
+
+        if (!account_id) {
+            return res.status(400).json({ error: 'account_id is required' });
+        }
+
+        logger.info('📥 Fetching pipelines for account', { account_id });
+
+        // Находим интеграцию для этого аккаунта
+        const integration = await Integration.findOne({
+            where: { account_id: Number(account_id) }
+        });
+
+        if (!integration) {
+            logger.warn('⚠️ No integration found for account', { account_id });
+            return res.status(404).json({
+                error: 'Integration not found',
+                message: 'Подключите интеграцию с amoCRM в настройках виджета'
+            });
+        }
+
+        // Проверяем, не истек ли токен
+        const now = Math.floor(Date.now() / 1000);
+        if (integration.token_expiry < now) {
+            logger.warn('⚠️ Access token expired, need to refresh');
+            return res.status(401).json({
+                error: 'Token expired',
+                message: 'Токен доступа устарел. Переподключите интеграцию в настройках виджета в amoCRM.'
+            });
+        }
+
+        // Запрашиваем воронки из amoCRM
+        const pipelinesResponse = await axios.get(
+            `${integration.base_url}/api/v4/leads/pipelines`,
+            {
+                headers: {
+                    'Authorization': `Bearer ${integration.access_token}`,
+                    'Content-Type': 'application/json'
+                }
+            }
+        );
+
+        const pipelines = pipelinesResponse.data._embedded?.pipelines || [];
+
+        // Преобразуем в нужный формат
+        const formattedPipelines = pipelines.map((pipeline: any) => ({
+            id: pipeline.id,
+            name: pipeline.name,
+            sort: pipeline.sort,
+            is_main: pipeline.is_main,
+            stages: Object.values(pipeline._embedded?.statuses || {}).map((status: any) => ({
+                id: status.id,
+                name: status.name,
+                sort: status.sort,
+                color: status.color,
+                type: status.type
+            }))
+        }));
+
+        logger.info(`✅ Found ${formattedPipelines.length} pipelines`);
+        res.json(formattedPipelines);
+
+    } catch (error: any) {
+        logger.error('❌ Error fetching pipelines:', {
+            message: error.message,
+            response: error.response?.data,
+            status: error.response?.status
+        });
+
+        if (error.response?.status === 401) {
+            return res.status(401).json({
+                error: 'Unauthorized',
+                message: 'Токен доступа устарел. Переподключите интеграцию в настройках виджета в amoCRM.'
+            });
+        }
+
+        res.status(500).json({
+            error: 'Failed to fetch pipelines',
+            message: error.message
+        });
+    }
+});
+
 export default router;
