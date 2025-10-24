@@ -1,7 +1,7 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { api } from '../../../lib/api-client';
+import { api } from '../../lib/api-client';
 import { useParams, useRouter } from 'next/navigation';
 import {
   Building2,
@@ -80,7 +80,7 @@ export default function IntegrationDetailPage() {
             Интеграция не найдена
           </h2>
           <Link
-            href="/admin-company"
+            href="/"
             className="text-blue-600 hover:text-blue-700"
           >
             Вернуться к списку
@@ -95,7 +95,7 @@ export default function IntegrationDetailPage() {
       {/* Шапка с кнопкой назад */}
       <div>
         <Link
-          href="/admin-company"
+          href="/"
           className="inline-flex items-center text-blue-600 hover:text-blue-700 mb-4"
         >
           <ArrowLeft className="w-4 h-4 mr-2" />

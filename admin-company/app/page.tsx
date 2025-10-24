@@ -1,7 +1,7 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { api } from '../../lib/api-client';
+import { api } from '../lib/api-client';
 import Link from 'next/link';
 import {
   Building2,
@@ -39,7 +39,7 @@ export default function AdminCompanyPage() {
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['admin-integrations'],
     queryFn: api.getIntegrations,
-    refetchInterval: 30000, // Обновление каждые 30 секунд
+    refetchInterval: 30000,
   });
 
   const { data: overviewData } = useQuery({
@@ -81,7 +81,6 @@ export default function AdminCompanyPage() {
 
   return (
     <div className="space-y-8">
-      {/* Заголовок */}
       <div>
         <h1 className="text-3xl font-bold text-gray-900">
           Управление интеграциями
@@ -91,7 +90,6 @@ export default function AdminCompanyPage() {
         </p>
       </div>
 
-      {/* Общая статистика */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         <StatCard
           title="Всего интеграций"
@@ -120,7 +118,6 @@ export default function AdminCompanyPage() {
         />
       </div>
 
-      {/* Список интеграций */}
       <div>
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-bold text-gray-900">
@@ -225,7 +222,7 @@ export default function AdminCompanyPage() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                       <Link
-                        href={`/admin-company/${integration.id}`}
+                        href={`/${integration.id}`}
                         className="inline-flex items-center text-blue-600 hover:text-blue-900"
                       >
                         Подробнее
@@ -255,7 +252,6 @@ export default function AdminCompanyPage() {
   );
 }
 
-// Компоненты
 function StatCard({
   title,
   value,
