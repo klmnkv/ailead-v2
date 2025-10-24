@@ -510,4 +510,54 @@ router.get('/amocrm/callback', async (req, res) => {
     }
 });
 
+/**
+ * Получить все интеграции
+ * GET /api/integrations
+ */
+router.get('/', async (req, res) => {
+    try {
+        logger.info('📊 Fetching all integrations');
+
+        const integrations = await Integration.findAll({
+            order: [['created_at', 'DESC']]
+        });
+
+        logger.info(`✅ Found ${integrations.length} integrations`);
+        return res.json(integrations);
+    } catch (error: any) {
+        logger.error('❌ Error fetching integrations:', error.message);
+        return res.status(500).json({
+            error: 'Failed to fetch integrations',
+            details: error.message
+        });
+    }
+});
+
+/**
+ * Получить интеграцию по ID
+ * GET /api/integrations/:id
+ */
+router.get('/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        logger.info('📊 Fetching integration', { id });
+
+        const integration = await Integration.findByPk(id);
+
+        if (!integration) {
+            logger.error('❌ Integration not found', { id });
+            return res.status(404).json({ error: 'Integration not found' });
+        }
+
+        logger.info('✅ Integration found', { id });
+        return res.json(integration);
+    } catch (error: any) {
+        logger.error('❌ Error fetching integration:', error.message);
+        return res.status(500).json({
+            error: 'Failed to fetch integration',
+            details: error.message
+        });
+    }
+});
+
 export default router;

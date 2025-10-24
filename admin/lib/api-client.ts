@@ -90,6 +90,58 @@ export interface BotConfig {
   updated_at?: string;
 }
 
+// Интеграции
+export interface Integration {
+  id: number;
+  account_id: number;
+  amocrm_account_id: number;
+  base_url: string;
+  domain: string;
+  access_token: string;
+  status: 'active' | 'inactive' | 'error';
+  created_at: string;
+  updated_at: string;
+  last_sync_at?: string;
+}
+
+// Боты
+export interface Bot {
+  id: number;
+  account_id: number;
+  name: string;
+  description?: string;
+  pipeline_id?: number;
+  stage_id?: number;
+  is_active: boolean;
+  prompt: string;
+  model: string;
+  temperature: number;
+  max_tokens: number;
+  deactivation_conditions?: string;
+  deactivation_message?: string;
+  ai_provider?: string;
+  api_key?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+// Воронки и этапы
+export interface Stage {
+  id: number;
+  name: string;
+  sort: number;
+  color: string;
+  pipeline_id: number;
+}
+
+export interface Pipeline {
+  id: number;
+  name: string;
+  sort: number;
+  is_main: boolean;
+  stages: Stage[];
+}
+
 // ============================================
 // API МЕТОДЫ
 // ============================================
@@ -155,6 +207,82 @@ export const api = {
   // Сценарии (заглушка)
   getScenarios: async () => {
     const response = await apiClient.get('/api/scenarios');
+    return response.data;
+  },
+
+  // ============================================
+  // ИНТЕГРАЦИИ
+  // ============================================
+
+  // Получить все интеграции
+  getIntegrations: async (): Promise<Integration[]> => {
+    const response = await apiClient.get('/api/integrations');
+    return response.data;
+  },
+
+  // Получить интеграцию по ID
+  getIntegration: async (id: number): Promise<Integration> => {
+    const response = await apiClient.get(`/api/integrations/${id}`);
+    return response.data;
+  },
+
+  // ============================================
+  // БОТЫ
+  // ============================================
+
+  // Получить всех ботов для аккаунта
+  getBots: async (accountId: number): Promise<Bot[]> => {
+    const response = await apiClient.get('/api/bots', {
+      params: { account_id: accountId }
+    });
+    return response.data;
+  },
+
+  // Получить бота по ID
+  getBot: async (id: number): Promise<Bot> => {
+    const response = await apiClient.get(`/api/bots/${id}`);
+    return response.data;
+  },
+
+  // Создать нового бота
+  createBot: async (data: Partial<Bot>): Promise<Bot> => {
+    const response = await apiClient.post('/api/bots', data);
+    return response.data;
+  },
+
+  // Обновить бота
+  updateBot: async (id: number, data: Partial<Bot>): Promise<Bot> => {
+    const response = await apiClient.put(`/api/bots/${id}`, data);
+    return response.data;
+  },
+
+  // Удалить бота
+  deleteBot: async (id: number): Promise<{ success: boolean }> => {
+    const response = await apiClient.delete(`/api/bots/${id}`);
+    return response.data;
+  },
+
+  // Переключить активность бота
+  toggleBot: async (id: number): Promise<Bot> => {
+    const response = await apiClient.post(`/api/bots/${id}/toggle`);
+    return response.data;
+  },
+
+  // Дублировать бота
+  duplicateBot: async (id: number): Promise<Bot> => {
+    const response = await apiClient.post(`/api/bots/${id}/duplicate`);
+    return response.data;
+  },
+
+  // ============================================
+  // ВОРОНКИ И ЭТАПЫ
+  // ============================================
+
+  // Получить воронки и этапы из amoCRM
+  getPipelines: async (accountId: number): Promise<Pipeline[]> => {
+    const response = await apiClient.get('/api/integrations/amocrm/pipelines', {
+      params: { account_id: accountId }
+    });
     return response.data;
   },
 };
