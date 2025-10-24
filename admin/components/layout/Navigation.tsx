@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 import {
   LayoutDashboard,
   Send,
@@ -11,7 +11,9 @@ import {
   Settings,
   Activity,
   Menu,
-  X
+  X,
+  Bot,
+  BookOpen
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -21,6 +23,8 @@ function cn(...classes: (string | undefined | null | false)[]) {
 
 const navigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
+  { name: 'Боты', href: '/bots', icon: Bot },
+  { name: 'База знаний', href: '/knowledge-base', icon: BookOpen },
   { name: 'Отправить', href: '/send', icon: Send },
   { name: 'История', href: '/history', icon: History },
   { name: 'Аналитика', href: '/analytics', icon: BarChart3 },
@@ -30,7 +34,12 @@ const navigation = [
 
 export function Navigation() {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  // Сохраняем account_id из query параметров для передачи между страницами
+  const accountId = searchParams.get('account_id');
+  const queryString = accountId ? `?account_id=${accountId}` : '';
 
   return (
     <>
@@ -39,7 +48,7 @@ export function Navigation() {
           <div className="flex justify-between items-center py-4">
             {/* Logo */}
             <Link
-              href="/"
+              href={`/${queryString}`}
               className="flex items-center space-x-3 hover:opacity-80 transition group"
             >
               <div className="relative">
@@ -63,7 +72,7 @@ export function Navigation() {
                 return (
                   <Link
                     key={item.name}
-                    href={item.href}
+                    href={`${item.href}${queryString}`}
                     className={cn(
                       'relative flex items-center space-x-2 px-4 py-2 rounded-lg font-medium transition-all duration-200',
                       isActive
@@ -106,7 +115,7 @@ export function Navigation() {
                 return (
                   <Link
                     key={item.name}
-                    href={item.href}
+                    href={`${item.href}${queryString}`}
                     onClick={() => setMobileMenuOpen(false)}
                     className={cn(
                       'flex items-center space-x-3 px-4 py-3 rounded-lg font-medium transition',
