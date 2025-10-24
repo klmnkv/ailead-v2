@@ -157,4 +157,37 @@ export const api = {
     const response = await apiClient.get('/api/scenarios');
     return response.data;
   },
+
+  // Admin API - Интеграции
+  getIntegrations: async () => {
+    const response = await apiClient.get('/api/admin/integrations');
+    return response.data;
+  },
+
+  getIntegrationDetails: async (id: number) => {
+    const response = await apiClient.get(`/api/admin/integrations/${id}`);
+    return response.data;
+  },
+
+  getIntegrationErrors: async (id: number, page = 1, limit = 20) => {
+    const response = await apiClient.get(`/api/admin/integrations/${id}/errors`, {
+      params: { page, limit }
+    });
+    return response.data;
+  },
+
+  getIntegrationResponseTimes: async (id: number) => {
+    const response = await apiClient.get(`/api/admin/integrations/${id}/response-times`);
+    return response.data;
+  },
+
+  updateIntegrationStatus: async (id: number, status: string) => {
+    const response = await apiClient.patch(`/api/admin/integrations/${id}/status`, { status });
+    return response.data;
+  },
+
+  getAdminOverview: async () => {
+    const response = await apiClient.get('/api/admin/stats/overview');
+    return response.data;
+  },
 };

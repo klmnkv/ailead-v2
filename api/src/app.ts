@@ -15,6 +15,7 @@ import analyticsRouter from './routes/analytics.routes.js';
 import integrationsRouter from './routes/integrations.routes.js';
 import webhookRouter from './routes/webhook.routes.js';
 import iframeRouter from './routes/iframe.routes.js';
+import adminRouter from './routes/admin.routes.js';
 
 const app = express();
 const httpServer = createServer(app);
@@ -102,6 +103,7 @@ app.use('/api/analytics', analyticsRouter);
 app.use('/api/integrations', integrationsRouter);
 app.use('/api/webhook', webhookRouter);
 app.use('/iframe', iframeRouter);  // ← ДОБАВЬТЕ (без /api!)
+app.use('/api/admin', adminRouter);
 
 // WebSocket setup
 setupWebSocket(io);
