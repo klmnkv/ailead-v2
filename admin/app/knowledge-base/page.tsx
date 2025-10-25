@@ -444,10 +444,43 @@ function AddItemModal({
     type: 'text' as 'text' | 'file' | 'url',
     metadata: {},
   });
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [uploadProgress, setUploadProgress] = useState(0);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setSelectedFile(file);
+      // Auto-fill title with filename if empty
+      if (!formData.title) {
+        setFormData({ ...formData, title: file.name });
+      }
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    onCreate(formData);
+
+    if (formData.type === 'file' && selectedFile) {
+      // File upload logic will be handled by parent
+      const reader = new FileReader();
+      reader.onload = () => {
+        const content = reader.result as string;
+        onCreate({
+          ...formData,
+          content,
+          metadata: {
+            ...formData.metadata,
+            filename: selectedFile.name,
+            filesize: selectedFile.size,
+            filetype: selectedFile.type,
+          }
+        });
+      };
+      reader.readAsText(selectedFile);
+    } else {
+      onCreate(formData);
+    }
   };
 
   return (
@@ -504,22 +537,40 @@ function AddItemModal({
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Содержимое *
+              {formData.type === 'file' ? 'Файл *' : 'Содержимое *'}
             </label>
-            <textarea
-              required
-              value={formData.content}
-              onChange={(e) => setFormData({ ...formData, content: e.target.value })}
-              rows={8}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-sm"
-              placeholder={
-                formData.type === 'text'
-                  ? 'Введите текст информации...'
-                  : formData.type === 'url'
-                  ? 'https://example.com/page'
-                  : 'Путь к файлу или содержимое'
-              }
-            />
+            {formData.type === 'file' ? (
+              <div>
+                <input
+                  type="file"
+                  required
+                  onChange={handleFileChange}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  accept=".txt,.pdf,.doc,.docx,.csv,.json,.xml"
+                />
+                {selectedFile && (
+                  <div className="mt-2 text-sm text-gray-600">
+                    Выбран файл: <span className="font-medium">{selectedFile.name}</span> ({(selectedFile.size / 1024).toFixed(2)} KB)
+                  </div>
+                )}
+                <p className="text-xs text-gray-500 mt-1">
+                  Поддерживаемые форматы: TXT, PDF, DOC, DOCX, CSV, JSON, XML
+                </p>
+              </div>
+            ) : (
+              <textarea
+                required
+                value={formData.content}
+                onChange={(e) => setFormData({ ...formData, content: e.target.value })}
+                rows={8}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-sm"
+                placeholder={
+                  formData.type === 'text'
+                    ? 'Введите текст информации...'
+                    : 'https://example.com/page'
+                }
+              />
+            )}
           </div>
 
           <div className="flex items-center space-x-3 pt-4">

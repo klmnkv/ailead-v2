@@ -47,6 +47,16 @@ export default function BotsPage() {
     queryFn: () => api.getKnowledgeBases(accountId),
   });
 
+  // Get selected knowledge base ID
+  const selectedKBId = getBotValue('knowledge_base_id') || (editedBot.knowledge_base_id !== undefined ? editedBot.knowledge_base_id : selectedBot?.knowledge_base_id);
+
+  // Fetch items for selected knowledge base
+  const { data: kbItems = [], isLoading: isKBItemsLoading } = useQuery({
+    queryKey: ['knowledgeBaseItems', selectedKBId],
+    queryFn: () => api.getKnowledgeBaseItems(selectedKBId!),
+    enabled: !!selectedKBId,
+  });
+
   // Select first bot if none selected
   const selectedBot = bots.find(b => b.id === selectedBotId) || bots[0];
 
@@ -154,6 +164,15 @@ export default function BotsPage() {
 
   const getBotValue = <K extends keyof Bot>(field: K): Bot[K] | undefined => {
     return (editedBot[field] !== undefined ? editedBot[field] : selectedBot?.[field]) as Bot[K] | undefined;
+  };
+
+  // Handle KB item selection
+  const toggleKBItem = (itemId: number) => {
+    const currentItems = getBotValue('knowledge_base_items') || [];
+    const newItems = currentItems.includes(itemId)
+      ? currentItems.filter(id => id !== itemId)
+      : [...currentItems, itemId];
+    updateBotField('knowledge_base_items', newItems as any);
   };
 
   const sendTestMessage = () => {
@@ -400,6 +419,8 @@ export default function BotsPage() {
                         onChange={(e) => {
                           const kbId = e.target.value ? parseInt(e.target.value) : null;
                           updateBotField('knowledge_base_id', kbId as any);
+                          // Clear selected items when changing KB
+                          updateBotField('knowledge_base_items', [] as any);
                         }}
                         className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                       >
@@ -414,9 +435,58 @@ export default function BotsPage() {
                       </select>
                     )}
                     <p className="text-xs text-gray-500 mt-1">
-                      💡 База знаний позволяет боту использовать дополнительную информацию при ответах
+                      💡 Выберите базу знаний, затем выберите конкретные файлы ниже
                     </p>
                   </div>
+
+                  {/* KB Items Selection */}
+                  {selectedKBId && (
+                    <div className="mt-4 p-4 border border-gray-200 rounded-lg bg-gray-50">
+                      <label className="block text-sm font-medium text-gray-700 mb-3">
+                        Выберите файлы из базы знаний
+                      </label>
+                      {isKBItemsLoading ? (
+                        <div className="flex items-center gap-2 text-gray-500">
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          <span>Загрузка элементов...</span>
+                        </div>
+                      ) : kbItems.length === 0 ? (
+                        <p className="text-sm text-gray-500">В этой базе знаний пока нет элементов</p>
+                      ) : (
+                        <div className="space-y-2 max-h-60 overflow-y-auto">
+                          {kbItems.map((item) => {
+                            const selectedItems = getBotValue('knowledge_base_items') || [];
+                            const isSelected = selectedItems.includes(item.id);
+                            return (
+                              <label
+                                key={item.id}
+                                className="flex items-start gap-3 p-3 bg-white rounded-lg border border-gray-200 hover:border-blue-300 cursor-pointer transition"
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={isSelected}
+                                  onChange={() => toggleKBItem(item.id)}
+                                  className="mt-1 w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                />
+                                <div className="flex-1">
+                                  <div className="font-medium text-sm text-gray-900">{item.title}</div>
+                                  <div className="text-xs text-gray-500 mt-1 line-clamp-2">{item.content.substring(0, 100)}...</div>
+                                  <div className="text-xs text-gray-400 mt-1">
+                                    {item.type === 'text' ? '📝 Текст' : item.type === 'file' ? '📄 Файл' : '🔗 Ссылка'}
+                                  </div>
+                                </div>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      )}
+                      {kbItems.length > 0 && (
+                        <p className="text-xs text-gray-500 mt-2">
+                          Выбрано: {(getBotValue('knowledge_base_items') || []).length} из {kbItems.length}
+                        </p>
+                      )}
+                    </div>
+                  )}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Промпт</label>
                     <textarea

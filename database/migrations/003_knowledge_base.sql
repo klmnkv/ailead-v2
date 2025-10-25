@@ -22,9 +22,10 @@ CREATE TABLE IF NOT EXISTS knowledge_base_items (
   updated_at TIMESTAMP DEFAULT NOW()
 );
 
--- Добавление поля knowledge_base_id в таблицу bots
+-- Добавление полей knowledge_base_id и knowledge_base_items в таблицу bots
 ALTER TABLE bots
-ADD COLUMN IF NOT EXISTS knowledge_base_id INTEGER REFERENCES knowledge_bases(id) ON DELETE SET NULL;
+ADD COLUMN IF NOT EXISTS knowledge_base_id INTEGER REFERENCES knowledge_bases(id) ON DELETE SET NULL,
+ADD COLUMN IF NOT EXISTS knowledge_base_items INTEGER[] DEFAULT '{}';
 
 -- Индексы для knowledge_bases
 CREATE INDEX IF NOT EXISTS idx_knowledge_bases_account_id ON knowledge_bases(account_id);
@@ -44,3 +45,4 @@ COMMENT ON TABLE knowledge_base_items IS 'Элементы базы знаний
 COMMENT ON COLUMN knowledge_bases.is_default IS 'Использовать эту базу знаний по умолчанию';
 COMMENT ON COLUMN knowledge_base_items.type IS 'Тип элемента: text, file, url';
 COMMENT ON COLUMN knowledge_base_items.metadata IS 'Дополнительные метаданные (источник, теги, и т.д.)';
+COMMENT ON COLUMN bots.knowledge_base_items IS 'Массив ID выбранных элементов из базы знаний';
