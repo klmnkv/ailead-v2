@@ -186,7 +186,7 @@ router.get('/:id/items', async (req, res) => {
 // KNOWLEDGE BASE ITEMS
 // ============================================
 
-// POST /api/knowledge-base-items - Создать элемент базы знаний
+// POST /api/knowledge-bases/items - Создать элемент базы знаний
 router.post('/items', async (req, res) => {
   try {
     const { knowledge_base_id, title, content, type, metadata } = req.body;

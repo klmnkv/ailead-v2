@@ -305,13 +305,13 @@ export const api = {
 
   // Создать элемент базы знаний
   createKnowledgeBaseItem: async (data: Partial<KnowledgeBaseItem>): Promise<KnowledgeBaseItem> => {
-    const response = await apiClient.post('/api/knowledge-base-items', data);
+    const response = await apiClient.post('/api/knowledge-bases/items', data);
     return response.data;
   },
 
   // Удалить элемент базы знаний
   deleteKnowledgeBaseItem: async (id: number): Promise<void> => {
-    await apiClient.delete(`/api/knowledge-base-items/${id}`);
+    await apiClient.delete(`/api/knowledge-bases/items/${id}`);
   },
 
   // Загрузить файл в базу знаний
@@ -323,7 +323,7 @@ export const api = {
       formData.append('title', title);
     }
 
-    const response = await apiClient.post('/api/knowledge-base-items/upload', formData, {
+    const response = await apiClient.post('/api/knowledge-bases/items/upload', formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },

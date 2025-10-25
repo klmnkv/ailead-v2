@@ -106,8 +106,7 @@ app.use('/api/integrations', integrationsRouter);
 app.use('/api/webhook', webhookRouter);
 app.use('/api/bot', botRouter);  // ← Bot config API (legacy)
 app.use('/api/bots', botsRouter);  // ← Bots CRUD API
-app.use('/api/knowledge-bases', knowledgeBaseRouter);  // ← Knowledge Base API
-app.use('/api/knowledge-base-items', knowledgeBaseRouter);  // ← Knowledge Base Items API
+app.use('/api/knowledge-bases', knowledgeBaseRouter);  // ← Knowledge Base API (includes items endpoints)
 app.use('/iframe', iframeRouter);
 
 // WebSocket setup
