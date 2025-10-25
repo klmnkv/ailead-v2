@@ -47,8 +47,11 @@ export default function BotsPage() {
     queryFn: () => api.getKnowledgeBases(accountId),
   });
 
-  // Get selected knowledge base ID
-  const selectedKBId = getBotValue('knowledge_base_id') || (editedBot.knowledge_base_id !== undefined ? editedBot.knowledge_base_id : selectedBot?.knowledge_base_id);
+  // Select first bot if none selected
+  const selectedBot = bots.find(b => b.id === selectedBotId) || bots[0];
+
+  // Get selected knowledge base ID (after selectedBot is defined)
+  const selectedKBId = (editedBot.knowledge_base_id !== undefined ? editedBot.knowledge_base_id : selectedBot?.knowledge_base_id) || null;
 
   // Fetch items for selected knowledge base
   const { data: kbItems = [], isLoading: isKBItemsLoading } = useQuery({
@@ -56,9 +59,6 @@ export default function BotsPage() {
     queryFn: () => api.getKnowledgeBaseItems(selectedKBId!),
     enabled: !!selectedKBId,
   });
-
-  // Select first bot if none selected
-  const selectedBot = bots.find(b => b.id === selectedBotId) || bots[0];
 
   // Helper functions
   const getPipelineName = (pipelineId?: number) => {
