@@ -71,6 +71,18 @@ export default function KnowledgeBasePage() {
     mutationFn: api.createKnowledgeBaseItem,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['knowledgeBaseItems', selectedKBId] });
+      queryClient.invalidateQueries({ queryKey: ['knowledgeBases', accountId] });
+      setShowAddItemModal(false);
+    },
+  });
+
+  // Upload File mutation
+  const uploadFileMutation = useMutation({
+    mutationFn: ({ knowledgeBaseId, file, title }: { knowledgeBaseId: number; file: File; title?: string }) =>
+      api.uploadKnowledgeBaseFile(knowledgeBaseId, file, title),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['knowledgeBaseItems', selectedKBId] });
+      queryClient.invalidateQueries({ queryKey: ['knowledgeBases', accountId] });
       setShowAddItemModal(false);
     },
   });
@@ -303,7 +315,8 @@ export default function KnowledgeBasePage() {
           knowledgeBaseId={selectedKB.id}
           onClose={() => setShowAddItemModal(false)}
           onCreate={(data) => createItemMutation.mutate(data)}
-          isLoading={createItemMutation.isPending}
+          onUploadFile={(file, title) => uploadFileMutation.mutate({ knowledgeBaseId: selectedKB.id, file, title })}
+          isLoading={createItemMutation.isPending || uploadFileMutation.isPending}
         />
       )}
     </div>
@@ -430,11 +443,13 @@ function AddItemModal({
   knowledgeBaseId,
   onClose,
   onCreate,
+  onUploadFile,
   isLoading,
 }: {
   knowledgeBaseId: number;
   onClose: () => void;
   onCreate: (data: Partial<KnowledgeBaseItem>) => void;
+  onUploadFile: (file: File, title?: string) => void;
   isLoading: boolean;
 }) {
   const [formData, setFormData] = useState({
@@ -462,22 +477,8 @@ function AddItemModal({
     e.preventDefault();
 
     if (formData.type === 'file' && selectedFile) {
-      // File upload logic will be handled by parent
-      const reader = new FileReader();
-      reader.onload = () => {
-        const content = reader.result as string;
-        onCreate({
-          ...formData,
-          content,
-          metadata: {
-            ...formData.metadata,
-            filename: selectedFile.name,
-            filesize: selectedFile.size,
-            filetype: selectedFile.type,
-          }
-        });
-      };
-      reader.readAsText(selectedFile);
+      // Upload file to server
+      onUploadFile(selectedFile, formData.title);
     } else {
       onCreate(formData);
     }

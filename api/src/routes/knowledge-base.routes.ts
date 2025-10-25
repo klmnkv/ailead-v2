@@ -1,10 +1,39 @@
 import express from 'express';
+import multer from 'multer';
 import { KnowledgeBase } from '../models/KnowledgeBase.js';
 import { KnowledgeBaseItem } from '../models/KnowledgeBaseItem.js';
 import { logger } from '../utils/logger.js';
 import { Op } from 'sequelize';
+import fs from 'fs/promises';
+import path from 'path';
 
 const router = express.Router();
+
+// Configure multer for file uploads
+const upload = multer({
+  dest: 'uploads/knowledge-base/',
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB max
+  },
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = [
+      'text/plain',
+      'text/csv',
+      'application/pdf',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/json',
+      'application/xml',
+      'text/xml',
+    ];
+
+    if (allowedTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Unsupported file type'));
+    }
+  },
+});
 
 // ============================================
 // KNOWLEDGE BASES
@@ -228,6 +257,87 @@ router.delete('/items/:id', async (req, res) => {
   } catch (error: any) {
     logger.error('Error deleting knowledge base item:', error);
     res.status(500).json({ error: error.message || 'Failed to delete knowledge base item' });
+  }
+});
+
+// POST /api/knowledge-base-items/upload - Загрузить файл в базу знаний
+router.post('/items/upload', upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+
+    const { knowledge_base_id, title } = req.body;
+
+    if (!knowledge_base_id) {
+      // Clean up uploaded file
+      await fs.unlink(req.file.path);
+      return res.status(400).json({ error: 'knowledge_base_id is required' });
+    }
+
+    // Проверяем, существует ли база знаний
+    const knowledgeBase = await KnowledgeBase.findByPk(knowledge_base_id);
+    if (!knowledgeBase) {
+      await fs.unlink(req.file.path);
+      return res.status(404).json({ error: 'Knowledge base not found' });
+    }
+
+    // Читаем содержимое файла
+    let content = '';
+    const fileExtension = path.extname(req.file.originalname).toLowerCase();
+
+    try {
+      if (fileExtension === '.txt' || fileExtension === '.csv' || fileExtension === '.json' || fileExtension === '.xml') {
+        // Простые текстовые файлы
+        content = await fs.readFile(req.file.path, 'utf-8');
+      } else if (fileExtension === '.pdf') {
+        // PDF parsing would require pdf-parse library
+        content = await fs.readFile(req.file.path, 'utf-8');
+        // TODO: Add PDF parsing when pdf-parse is installed
+        logger.warn('PDF parsing not yet implemented, storing raw content');
+      } else if (fileExtension === '.doc' || fileExtension === '.docx') {
+        // DOCX parsing would require mammoth library
+        content = await fs.readFile(req.file.path, 'utf-8');
+        // TODO: Add DOCX parsing when mammoth is installed
+        logger.warn('DOCX parsing not yet implemented, storing raw content');
+      } else {
+        // Default: read as text
+        content = await fs.readFile(req.file.path, 'utf-8');
+      }
+    } catch (readError) {
+      logger.error('Error reading file:', readError);
+      await fs.unlink(req.file.path);
+      return res.status(500).json({ error: 'Failed to read file content' });
+    }
+
+    // Создаем элемент базы знаний
+    const item = await KnowledgeBaseItem.create({
+      knowledge_base_id,
+      title: title || req.file.originalname,
+      content,
+      type: 'file',
+      metadata: {
+        filename: req.file.originalname,
+        filesize: req.file.size,
+        mimetype: req.file.mimetype,
+        uploadedAt: new Date().toISOString(),
+      },
+    });
+
+    // Удаляем временный файл
+    await fs.unlink(req.file.path);
+
+    logger.info(`Uploaded file ${req.file.originalname} to KB ${knowledge_base_id}`);
+    res.status(201).json(item.toJSON());
+  } catch (error: any) {
+    logger.error('Error uploading file:', error);
+    // Clean up file if exists
+    if (req.file) {
+      try {
+        await fs.unlink(req.file.path);
+      } catch {}
+    }
+    res.status(500).json({ error: error.message || 'Failed to upload file' });
   }
 });
 

@@ -315,11 +315,13 @@ export const api = {
   },
 
   // Загрузить файл в базу знаний
-  uploadKnowledgeBaseFile: async (knowledgeBaseId: number, file: File, title: string): Promise<KnowledgeBaseItem> => {
+  uploadKnowledgeBaseFile: async (knowledgeBaseId: number, file: File, title?: string): Promise<KnowledgeBaseItem> => {
     const formData = new FormData();
     formData.append('file', file);
     formData.append('knowledge_base_id', knowledgeBaseId.toString());
-    formData.append('title', title);
+    if (title) {
+      formData.append('title', title);
+    }
 
     const response = await apiClient.post('/api/knowledge-base-items/upload', formData, {
       headers: {

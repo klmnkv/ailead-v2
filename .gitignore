@@ -31,3 +31,8 @@ build/
 # Temporary files
 tmp/
 temp/
+
+# Uploads
+api/uploads/*
+!api/uploads/.gitkeep
+!api/uploads/**/.gitkeep
