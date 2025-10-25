@@ -15,7 +15,7 @@ import {
   Send,
   Loader2
 } from 'lucide-react';
-import { api, Bot } from '@/lib/api-client';
+import { api, Bot, KnowledgeBase } from '@/lib/api-client';
 
 export default function BotsPage() {
   const searchParams = useSearchParams();
@@ -39,6 +39,12 @@ export default function BotsPage() {
     queryKey: ['pipelines', accountId],
     queryFn: () => api.getPipelines(accountId),
     retry: false,
+  });
+
+  // Fetch knowledge bases
+  const { data: knowledgeBases = [], isLoading: isKnowledgeBasesLoading } = useQuery({
+    queryKey: ['knowledgeBases', accountId],
+    queryFn: () => api.getKnowledgeBases(accountId),
   });
 
   // Select first bot if none selected
@@ -380,14 +386,46 @@ export default function BotsPage() {
                   <h3 className="font-semibold text-gray-900">Инструкции для бота</h3>
                   <HelpCircle className="w-4 h-4 text-gray-400 cursor-help" />
                 </div>
-                <div className="p-6">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Промпт</label>
-                  <textarea
-                    value={getBotValue('prompt') || ''}
-                    onChange={(e) => updateBotField('prompt', e.target.value)}
-                    rows={6}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-sm"
-                  />
+                <div className="p-6 space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">База знаний</label>
+                    {isKnowledgeBasesLoading ? (
+                      <div className="w-full px-4 py-2 border border-gray-300 rounded-lg flex items-center gap-2 text-gray-500">
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>Загрузка баз знаний...</span>
+                      </div>
+                    ) : (
+                      <select
+                        value={getBotValue('knowledge_base_id') || ''}
+                        onChange={(e) => {
+                          const kbId = e.target.value ? parseInt(e.target.value) : null;
+                          updateBotField('knowledge_base_id', kbId as any);
+                        }}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value="">Не использовать базу знаний</option>
+                        {knowledgeBases
+                          .filter((kb: KnowledgeBase) => kb.is_active)
+                          .map((kb: KnowledgeBase) => (
+                            <option key={kb.id} value={kb.id}>
+                              {kb.name} {kb.is_default ? '(по умолчанию)' : ''}
+                            </option>
+                          ))}
+                      </select>
+                    )}
+                    <p className="text-xs text-gray-500 mt-1">
+                      💡 База знаний позволяет боту использовать дополнительную информацию при ответах
+                    </p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Промпт</label>
+                    <textarea
+                      value={getBotValue('prompt') || ''}
+                      onChange={(e) => updateBotField('prompt', e.target.value)}
+                      rows={6}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-sm"
+                    />
+                  </div>
                 </div>
               </div>
 

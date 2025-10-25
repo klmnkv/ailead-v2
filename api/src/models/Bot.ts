@@ -14,6 +14,7 @@ export interface BotAttributes {
   max_tokens: number;
   pipeline_id?: number;
   stage_id?: number;
+  knowledge_base_id?: number;
   deactivation_conditions?: string;
   deactivation_message?: string;
   is_active: boolean;
@@ -36,6 +37,7 @@ export class Bot extends Model<BotAttributes, BotCreationAttributes> implements 
   declare max_tokens: number;
   declare pipeline_id?: number;
   declare stage_id?: number;
+  declare knowledge_base_id?: number;
   declare deactivation_conditions?: string;
   declare deactivation_message?: string;
   declare is_active: boolean;
@@ -117,6 +119,11 @@ Bot.init(
       type: DataTypes.INTEGER,
       allowNull: true,
       comment: 'ID этапа в воронке amoCRM',
+    },
+    knowledge_base_id: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      comment: 'ID базы знаний',
     },
     deactivation_conditions: {
       type: DataTypes.TEXT,

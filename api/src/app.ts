@@ -17,6 +17,7 @@ import webhookRouter from './routes/webhook.routes.js';
 import iframeRouter from './routes/iframe.routes.js';
 import botRouter from './routes/bot.js';
 import botsRouter from './routes/bots.routes.js';
+import knowledgeBaseRouter from './routes/knowledge-base.routes.js';
 
 const app = express();
 const httpServer = createServer(app);
@@ -105,6 +106,8 @@ app.use('/api/integrations', integrationsRouter);
 app.use('/api/webhook', webhookRouter);
 app.use('/api/bot', botRouter);  // ← Bot config API (legacy)
 app.use('/api/bots', botsRouter);  // ← Bots CRUD API
+app.use('/api/knowledge-bases', knowledgeBaseRouter);  // ← Knowledge Base API
+app.use('/api/knowledge-base-items', knowledgeBaseRouter);  // ← Knowledge Base Items API
 app.use('/iframe', iframeRouter);
 
 // WebSocket setup

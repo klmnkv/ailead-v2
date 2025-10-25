@@ -103,6 +103,7 @@ export interface Bot {
   max_tokens: number;
   pipeline_id?: number;
   stage_id?: number;
+  knowledge_base_id?: number;
   deactivation_conditions?: string;
   deactivation_message?: string;
   is_active: boolean;
@@ -120,6 +121,29 @@ export interface Pipeline {
   id: number;
   name: string;
   stages: Stage[];
+}
+
+export interface KnowledgeBase {
+  id: number;
+  account_id: number;
+  name: string;
+  description?: string;
+  is_active: boolean;
+  is_default: boolean;
+  items_count?: number;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface KnowledgeBaseItem {
+  id: number;
+  knowledge_base_id: number;
+  title: string;
+  content: string;
+  type: 'text' | 'file' | 'url';
+  metadata?: Record<string, any>;
+  created_at?: string;
+  updated_at?: string;
 }
 
 // ============================================
@@ -241,5 +265,51 @@ export const api = {
       params: { account_id: accountId },
     });
     return response.data;
+  },
+
+  // ============================================
+  // БАЗА ЗНАНИЙ - Knowledge Base
+  // ============================================
+
+  // Получить список баз знаний
+  getKnowledgeBases: async (accountId: number): Promise<KnowledgeBase[]> => {
+    const response = await apiClient.get('/api/knowledge-bases', {
+      params: { account_id: accountId },
+    });
+    return response.data;
+  },
+
+  // Создать базу знаний
+  createKnowledgeBase: async (data: Partial<KnowledgeBase>): Promise<KnowledgeBase> => {
+    const response = await apiClient.post('/api/knowledge-bases', data);
+    return response.data;
+  },
+
+  // Обновить базу знаний
+  updateKnowledgeBase: async (id: number, data: Partial<KnowledgeBase>): Promise<KnowledgeBase> => {
+    const response = await apiClient.put(`/api/knowledge-bases/${id}`, data);
+    return response.data;
+  },
+
+  // Удалить базу знаний
+  deleteKnowledgeBase: async (id: number): Promise<void> => {
+    await apiClient.delete(`/api/knowledge-bases/${id}`);
+  },
+
+  // Получить элементы базы знаний
+  getKnowledgeBaseItems: async (knowledgeBaseId: number): Promise<KnowledgeBaseItem[]> => {
+    const response = await apiClient.get(`/api/knowledge-bases/${knowledgeBaseId}/items`);
+    return response.data;
+  },
+
+  // Создать элемент базы знаний
+  createKnowledgeBaseItem: async (data: Partial<KnowledgeBaseItem>): Promise<KnowledgeBaseItem> => {
+    const response = await apiClient.post('/api/knowledge-base-items', data);
+    return response.data;
+  },
+
+  // Удалить элемент базы знаний
+  deleteKnowledgeBaseItem: async (id: number): Promise<void> => {
+    await apiClient.delete(`/api/knowledge-base-items/${id}`);
   },
 };
