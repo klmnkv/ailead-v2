@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'next/navigation';
 import {
@@ -43,6 +43,13 @@ export default function KnowledgeBasePage() {
     queryFn: () => api.getKnowledgeBaseItems(selectedKBId!),
     enabled: !!selectedKBId,
   });
+
+  // Auto-select first KB if none selected
+  useEffect(() => {
+    if (!selectedKBId && knowledgeBases.length > 0) {
+      setSelectedKBId(knowledgeBases[0].id);
+    }
+  }, [knowledgeBases, selectedKBId]);
 
   // Select first KB if none selected
   const selectedKB = knowledgeBases.find(kb => kb.id === selectedKBId) || knowledgeBases[0];
